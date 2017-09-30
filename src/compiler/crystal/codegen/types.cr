@@ -39,6 +39,55 @@ module Crystal
       end
     end
 
+    # Returns `true` if the type has inner pointers.
+    # This is useful to know because if a type doesn't have
+    # inner pointers we can use `malloc_atomic` instead of
+    # `malloc` in `Pointer.malloc` for a tiny performance boost.
+    def has_inner_pointers?
+      case self
+      when .void?
+        # We consider Void to have pointers, so doing
+        # Pointer(Void).malloc(...).as(ReferenceType)
+        # will consider potential inner pointers as such.
+        true
+      when PointerInstanceType
+        true
+      when ProcInstanceType
+        # A proc can have closure data which might have pointers
+        true
+      when StaticArrayInstanceType
+        self.element_type.has_inner_pointers?
+      when TupleInstanceType
+        self.tuple_types.any? &.has_inner_pointers?
+      when NamedTupleInstanceType
+        self.entries.any? &.type.has_inner_pointers?
+      when PrimitiveType
+        false
+      when EnumType
+        false
+      when UnionType
+        self.union_types.any? &.has_inner_pointers?
+      when AliasType
+        self.aliased_type.has_inner_pointers?
+      when TypeDefType
+        self.typedef.has_inner_pointers?
+      when VirtualType
+        if struct?
+          self.subtypes.any? &.has_inner_pointers?
+        else
+          true
+        end
+      when InstanceVarContainer
+        if struct?
+          all_instance_vars.each_value.any? &.type.has_inner_pointers?
+        else
+          true
+        end
+      else
+        true
+      end
+    end
+
     def llvm_name
       String.build do |io|
         llvm_name io
@@ -122,8 +171,36 @@ module Crystal
       "#{llvm_name}:init"
     end
 
+    # Returns `true` if this constant's value is a simple literal, like
+    # `nil`, a number, char, string or symbol literal.
     def simple?
       value.simple_literal?
+    end
+
+    @compile_time_value : (Int16 | Int32 | Int64 | Int8 | UInt16 | UInt32 | UInt64 | UInt8 | Bool | Char | Nil)
+    @computed_compile_time_value = false
+
+    # Returns a value if this constant's value can be evaluated at
+    # compile time (things like `1 + 2` and such). Returns nil otherwise.
+    def compile_time_value
+      unless @computed_compile_time_value
+        @computed_compile_time_value = true
+
+        case value = self.value
+        when BoolLiteral
+          @compile_time_value = value.value
+        when CharLiteral
+          @compile_time_value = value.value
+        else
+          case type = value.type?
+          when IntegerType, EnumType
+            interpreter = MathInterpreter.new(namespace, visitor)
+            @compile_time_value = interpreter.interpret(value) rescue nil
+          end
+        end
+      end
+
+      @compile_time_value
     end
   end
 end

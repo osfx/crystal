@@ -332,7 +332,7 @@ class HTTP::Client
     #
     # ```
     # client = HTTP::Client.new("www.example.com")
-    # response = client.{{method.id}}("/", headers: HTTP::Headers{"User-agent" => "AwesomeApp"}, body: "Hello!")
+    # response = client.{{method.id}}("/", headers: HTTP::Headers{"User-Agent" => "AwesomeApp"}, body: "Hello!")
     # response.body #=> "..."
     # ```
     def {{method.id}}(path, headers : HTTP::Headers? = nil, body : BodyType = nil) : HTTP::Client::Response
@@ -344,7 +344,7 @@ class HTTP::Client
     #
     # ```
     # client = HTTP::Client.new("www.example.com")
-    # client.{{method.id}}("/", headers: HTTP::Headers{"User-agent" => "AwesomeApp"}, body: "Hello!") do |response|
+    # client.{{method.id}}("/", headers: HTTP::Headers{"User-Agent" => "AwesomeApp"}, body: "Hello!") do |response|
     #   response.body_io.gets #=> "..."
     # end
     # ```
@@ -358,7 +358,7 @@ class HTTP::Client
     # The response will have its body as a `String`, accessed via `HTTP::Client::Response#body`.
     #
     # ```
-    # response = HTTP::Client.{{method.id}}("/", headers: HTTP::Headers{"User-agent" => "AwesomeApp"}, body: "Hello!")
+    # response = HTTP::Client.{{method.id}}("/", headers: HTTP::Headers{"User-Agent" => "AwesomeApp"}, body: "Hello!")
     # response.body #=> "..."
     # ```
     def self.{{method.id}}(url : String | URI, headers : HTTP::Headers? = nil, body : BodyType = nil, tls = nil) : HTTP::Client::Response
@@ -369,7 +369,7 @@ class HTTP::Client
     # The response will have its body as an `IO` accessed via `HTTP::Client::Response#body_io`.
     #
     # ```
-    # HTTP::Client.{{method.id}}("/", headers: HTTP::Headers{"User-agent" => "AwesomeApp"}, body: "Hello!") do |response|
+    # HTTP::Client.{{method.id}}("/", headers: HTTP::Headers{"User-Agent" => "AwesomeApp"}, body: "Hello!") do |response|
     #   response.body_io.gets #=> "..."
     # end
     # ```
@@ -380,94 +380,96 @@ class HTTP::Client
     end
   {% end %}
 
-  # Executes a POST with form data. The "Content-type" header is set
-  # to "application/x-www-form-urlencoded".
-  #
-  # ```
-  # client = HTTP::Client.new "www.example.com"
-  # response = client.post_form "/", "foo=bar"
-  # ```
-  def post_form(path, form : String | IO, headers : HTTP::Headers? = nil) : HTTP::Client::Response
-    request = new_request("POST", path, headers, form)
-    request.headers["Content-type"] = "application/x-www-form-urlencoded"
-    exec request
-  end
-
-  # Executes a POST with form data and yields the response to the block.
-  # The response will have its body as an `IO` accessed via `HTTP::Client::Response#body_io`.
-  # The "Content-type" header is set to "application/x-www-form-urlencoded".
-  #
-  # ```
-  # client = HTTP::Client.new "www.example.com"
-  # client.post_form("/", "foo=bar") do |response|
-  #   response.body_io.gets
-  # end
-  # ```
-  def post_form(path, form : String | IO, headers : HTTP::Headers? = nil)
-    request = new_request("POST", path, headers, form)
-    request.headers["Content-type"] = "application/x-www-form-urlencoded"
-    exec(request) do |response|
-      yield response
+  {% for http_method in %w(post put patch) %}
+    # Executes a {{http_method.id.upcase}} request with form data and returns a `Response`. The "Content-Type" header is set
+    # to "application/x-www-form-urlencoded".
+    #
+    # ```
+    # client = HTTP::Client.new "www.example.com"
+    # response = client.{{http_method.id}}_form "/", "foo=bar"
+    # ```
+    def {{http_method.id}}_form(path, form : String | IO, headers : HTTP::Headers? = nil) : HTTP::Client::Response
+      request = new_request({{http_method.upcase}}, path, headers, form)
+      request.headers["Content-Type"] = "application/x-www-form-urlencoded"
+      exec request
     end
-  end
 
-  # Executes a POST with form data. The "Content-type" header is set
-  # to "application/x-www-form-urlencoded".
-  #
-  # ```
-  # client = HTTP::Client.new "www.example.com"
-  # response = client.post_form "/", {"foo" => "bar"}
-  # ```
-  def post_form(path, form : Hash, headers : HTTP::Headers? = nil) : HTTP::Client::Response
-    body = HTTP::Params.from_hash(form)
-    post_form path, body, headers
-  end
-
-  # Executes a POST with form data and yields the response to the block.
-  # The response will have its body as an `IO` accessed via `HTTP::Client::Response#body_io`.
-  # The "Content-type" header is set to "application/x-www-form-urlencoded".
-  #
-  # ```
-  # client = HTTP::Client.new "www.example.com"
-  # client.post_form("/", {"foo" => "bar"}) do |response|
-  #   response.body_io.gets
-  # end
-  # ```
-  def post_form(path, form : Hash, headers : HTTP::Headers? = nil)
-    body = HTTP::Params.from_hash(form)
-    post_form(path, body, headers) do |response|
-      yield response
-    end
-  end
-
-  # Executes a POST with form data. The "Content-type" header is set
-  # to "application/x-www-form-urlencoded".
-  #
-  # ```
-  # response = HTTP::Client.post_form "http://www.example.com", "foo=bar"
-  # ```
-  def self.post_form(url, form : String | IO | Hash, headers : HTTP::Headers? = nil, tls = nil) : HTTP::Client::Response
-    exec(url, tls) do |client, path|
-      client.post_form(path, form, headers)
-    end
-  end
-
-  # Executes a POST with form data and yields the response to the block.
-  # The response will have its body as an `IO` accessed via `HTTP::Client::Response#body_io`.
-  # The "Content-type" header is set to "application/x-www-form-urlencoded".
-  #
-  # ```
-  # HTTP::Client.post_form("http://www.example.com", "foo=bar") do |response|
-  #   response.body_io.gets
-  # end
-  # ```
-  def self.post_form(url, form : String | IO | Hash, headers : HTTP::Headers? = nil, tls = nil)
-    exec(url, tls) do |client, path|
-      client.post_form(path, form, headers) do |response|
+    # Executes a {{http_method.id.upcase}} request with form data and yields the response to the block.
+    # The response will have its body as an `IO` accessed via `HTTP::Client::Response#body_io`.
+    # The "Content-Type" header is set to "application/x-www-form-urlencoded".
+    #
+    # ```
+    # client = HTTP::Client.new "www.example.com"
+    # client.{{http_method.id}}_form("/", "foo=bar") do |response|
+    #   response.body_io.gets
+    # end
+    # ```
+    def {{http_method.id}}_form(path, form : String | IO, headers : HTTP::Headers? = nil)
+      request = new_request({{http_method.upcase}}, path, headers, form)
+      request.headers["Content-Type"] = "application/x-www-form-urlencoded"
+      exec(request) do |response|
         yield response
       end
     end
-  end
+
+    # Executes a {{http_method.id.upcase}} request with form data and returns a `Response`. The "Content-Type" header is set
+    # to "application/x-www-form-urlencoded".
+    #
+    # ```
+    # client = HTTP::Client.new "www.example.com"
+    # response = client.{{http_method.id}}_form "/", {"foo" => "bar"}
+    # ```
+    def {{http_method.id}}_form(path, form : Hash(String, _) | NamedTuple, headers : HTTP::Headers? = nil) : HTTP::Client::Response
+      body = HTTP::Params.encode(form)
+      {{http_method.id}}_form path, body, headers
+    end
+
+    # Executes a {{http_method.id.upcase}} request with form data and yields the response to the block.
+    # The response will have its body as an `IO` accessed via `HTTP::Client::Response#body_io`.
+    # The "Content-type" header is set to "application/x-www-form-urlencoded".
+    #
+    # ```
+    # client = HTTP::Client.new "www.example.com"
+    # client.{{http_method.id}}_form("/", {"foo" => "bar"}) do |response|
+    #   response.body_io.gets
+    # end
+    # ```
+    def {{http_method.id}}_form(path, form : Hash(String, _) | NamedTuple, headers : HTTP::Headers? = nil)
+      body = HTTP::Params.encode(form)
+      {{http_method.id}}_form(path, body, headers) do |response|
+        yield response
+      end
+    end
+
+    # Executes a {{http_method.id.upcase}} request with form data and returns a `Response`. The "Content-Type" header is set
+    # to "application/x-www-form-urlencoded".
+    #
+    # ```
+    # response = HTTP::Client.{{http_method.id}}_form "http://www.example.com", "foo=bar"
+    # ```
+    def self.{{http_method.id}}_form(url, form : String | IO | Hash, headers : HTTP::Headers? = nil, tls = nil) : HTTP::Client::Response
+      exec(url, tls) do |client, path|
+        client.{{http_method.id}}_form(path, form, headers)
+      end
+    end
+
+    # Executes a {{http_method.id.upcase}} request with form data and yields the response to the block.
+    # The response will have its body as an `IO` accessed via `HTTP::Client::Response#body_io`.
+    # The "Content-Type" header is set to "application/x-www-form-urlencoded".
+    #
+    # ```
+    # HTTP::Client.{{http_method.id}}_form("http://www.example.com", "foo=bar") do |response|
+    #   response.body_io.gets
+    # end
+    # ```
+    def self.{{http_method.id}}_form(url, form : String | IO | Hash, headers : HTTP::Headers? = nil, tls = nil)
+      exec(url, tls) do |client, path|
+        client.{{http_method.id}}_form(path, form, headers) do |response|
+          yield response
+        end
+      end
+    end
+  {% end %}
 
   # Executes a request.
   # The response will have its body as a `String`, accessed via `HTTP::Client::Response#body`.
@@ -492,7 +494,7 @@ class HTTP::Client
     response = exec_internal_single(request)
     return handle_response(response) if response
 
-    raise "unexpected end of http response"
+    raise "Unexpected end of http response"
   end
 
   private def exec_internal_single(request)
@@ -540,8 +542,7 @@ class HTTP::Client
         end
       end
     end
-
-    raise "unexpected end of http response"
+    raise "Unexpected end of http response"
   end
 
   private def exec_internal_single(request)
@@ -561,7 +562,7 @@ class HTTP::Client
   end
 
   private def set_defaults(request)
-    request.headers["User-agent"] ||= "Crystal"
+    request.headers["User-Agent"] ||= "Crystal"
     {% if flag?(:without_zlib) %}
       false
     {% else %}
@@ -691,7 +692,7 @@ class HTTP::Client
       scheme = uri.scheme
       case scheme
       when nil
-        raise ArgumentError.new("missing scheme: #{uri}")
+        raise ArgumentError.new("Missing scheme: #{uri}")
       when "http"
         false
       when "https"
@@ -705,7 +706,7 @@ class HTTP::Client
       scheme = uri.scheme
       case {scheme, context}
       when {nil, _}
-        raise ArgumentError.new("missing scheme: #{uri}")
+        raise ArgumentError.new("Missing scheme: #{uri}")
       when {"http", nil}
         false
       when {"http", OpenSSL::SSL::Context::Client}

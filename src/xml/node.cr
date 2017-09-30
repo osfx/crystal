@@ -21,17 +21,28 @@ struct XML::Node
   end
 
   # Gets the attribute content for the *attribute* given by name.
-  #
   # Raises `KeyError` if attribute is not found.
   def [](attribute : String) : String
     attributes[attribute].content || raise(KeyError.new("Missing attribute: #{attribute}"))
   end
 
   # Gets the attribute content for the *attribute* given by name.
-  #
   # Returns `nil` if attribute is not found.
   def []?(attribute : String) : String?
     attributes[attribute]?.try &.content
+  end
+
+  # Sets *attribute* of this node to *value*.
+  # Raises `XML::Error` if this node does not support attributes.
+  def []=(name : String, value)
+    raise XML::Error.new("Can't set attribute of #{type}", 0) unless element?
+    attributes[name] = value
+  end
+
+  # Deletes attribute given by *name*.
+  # Returns attributes value, or `nil` if attribute not found.
+  def delete(name : String)
+    attributes.delete(name)
   end
 
   # Compares with *other*.
@@ -94,9 +105,15 @@ struct XML::Node
     Node.new @node.value.doc
   end
 
-  # Returns `true` if this is a Document node.
+  # Returns `true` if this is a Document or HTML Document node.
   def document?
-    type == XML::Type::DOCUMENT_NODE
+    case type
+    when XML::Type::DOCUMENT_NODE,
+         XML::Type::HTML_DOCUMENT_NODE
+      true
+    else
+      false
+    end
   end
 
   # Returns the encoding of this node's document.
@@ -142,10 +159,8 @@ struct XML::Node
     type == XML::Type::DOCUMENT_FRAG_NODE
   end
 
-  # Returns this node's `#object_id` as the hash value.
-  def hash
-    object_id
-  end
+  # See `Object#hash(hasher)`
+  def_hash object_id
 
   # Returns the content for this Node.
   def inner_text
@@ -246,15 +261,17 @@ struct XML::Node
       "#cdata-section"
     elsif fragment?
       "#document-fragment"
-    else
+    elsif @node.value && @node.value.name
       String.new(@node.value.name)
+    else
+      ""
     end
   end
 
   # Sets the name for this Node.
   def name=(name)
     if document? || text? || cdata? || fragment?
-      raise XML::Error.new("can't set name of XML #{type}", 0)
+      raise XML::Error.new("Can't set name of XML #{type}", 0)
     end
     LibXML.xmlNodeSetName(self, name.to_s)
   end
@@ -441,6 +458,11 @@ struct XML::Node
   # Returns the type for this Node as `XML::Type`.
   def type
     @node.value.type
+  end
+
+  # Removes the node from the XML document.
+  def unlink
+    LibXML.xmlUnlinkNode(self)
   end
 
   # Returns `true` if this is an xml Document node.

@@ -1,5 +1,4 @@
-require "c/sys/time"
-require "c/time"
+require "crystal/system/time"
 
 # `Time` represents an instance in time. Here are some examples:
 #
@@ -116,7 +115,7 @@ struct Time
 
   def initialize(ticks : Int, kind = Kind::Unspecified)
     if ticks < 0 || ticks > MAX_VALUE_TICKS
-      raise ArgumentError.new "invalid ticks value"
+      raise ArgumentError.new "Invalid ticks value"
     end
 
     @encoded = ticks.to_i64
@@ -131,7 +130,7 @@ struct Time
            0 <= minute <= 59 &&
            0 <= second <= 59 &&
            0 <= millisecond <= 999
-      raise ArgumentError.new "invalid time"
+      raise ArgumentError.new "Invalid time"
     end
 
     @encoded = Span.new(Time.absolute_days(year, month, day), hour, minute, second, millisecond).ticks
@@ -161,6 +160,10 @@ struct Time
   # ```
   def self.epoch_ms(milliseconds : Int) : self
     new(UnixEpoch + milliseconds.to_i64 * Span::TicksPerMillisecond, Kind::Utc)
+  end
+
+  def clone
+    self
   end
 
   def +(other : Span)
@@ -204,7 +207,7 @@ struct Time
   def add_ticks(value)
     res = (value + (encoded & TicksMask)).to_i64
     unless 0 <= res <= MAX_VALUE_TICKS
-      raise ArgumentError.new "invalid time"
+      raise ArgumentError.new "Invalid time"
     end
 
     mask Time.new(res)
@@ -306,17 +309,16 @@ struct Time
     end
   end
 
-  def hash
-    @encoded
-  end
+  # See `Object#hash(hasher)`
+  def_hash @encoded
 
   def self.days_in_month(year, month) : Int32
     unless 1 <= month <= 12
-      raise ArgumentError.new "invalid month"
+      raise ArgumentError.new "Invalid month"
     end
 
     unless 1 <= year <= 9999
-      raise ArgumentError.new "invalid year"
+      raise ArgumentError.new "Invalid year"
     end
 
     days = leap_year?(year) ? DAYS_MONTH_LEAP : DAYS_MONTH
@@ -325,7 +327,7 @@ struct Time
 
   def self.leap_year?(year) : Bool
     unless 1 <= year <= 9999
-      raise ArgumentError.new "invalid year"
+      raise ArgumentError.new "Invalid year"
     end
 
     (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
@@ -587,8 +589,7 @@ struct Time
   end
 
   private def self.compute_ticks(second, tenth_microsecond)
-    UnixEpoch +
-      second.to_i64 * Span::TicksPerSecond +
+    second.to_i64 * Span::TicksPerSecond +
       tenth_microsecond.to_i64
   end
 
@@ -598,36 +599,11 @@ struct Time
   end
 
   private def self.compute_offset(second)
-    LibC.tzset
-    offset = nil
-
-    {% if LibC.methods.includes?("daylight".id) %}
-      if LibC.daylight == 0
-        # current TZ doesn't have any DST, neither in past, present or future
-        offset = -LibC.timezone.to_i64
-      end
-    {% end %}
-
-    unless offset
-      # current TZ may have DST, either in past, present or future
-      ret = LibC.localtime_r(pointerof(second), out tm)
-      raise Errno.new("localtime_r") if ret.null?
-      offset = tm.tm_gmtoff.to_i64
-    end
-
-    offset / 60 * Span::TicksPerMinute
+    Crystal::System::Time.compute_utc_offset(second) / 60 * Span::TicksPerMinute
   end
 
   private def self.compute_second_and_tenth_microsecond
-    {% if flag?(:darwin) %}
-      ret = LibC.gettimeofday(out timeval, nil)
-      raise Errno.new("gettimeofday") unless ret == 0
-      {timeval.tv_sec, timeval.tv_usec.to_i64 * 10}
-    {% else %}
-      ret = LibC.clock_gettime(LibC::CLOCK_REALTIME, out timespec)
-      raise Errno.new("clock_gettime") unless ret == 0
-      {timespec.tv_sec, timespec.tv_nsec / 100}
-    {% end %}
+    Crystal::System::Time.compute_utc_second_and_tenth_microsecond
   end
 end
 

@@ -41,6 +41,8 @@ module IO::ByteFormat
   abstract def encode(int : UInt32, io : IO)
   abstract def encode(int : Int64, io : IO)
   abstract def encode(int : UInt64, io : IO)
+  abstract def encode(int : Int128, io : IO)
+  abstract def encode(int : UInt128, io : IO)
   abstract def encode(int : Float32, io : IO)
   abstract def encode(int : Float64, io : IO)
 
@@ -52,6 +54,8 @@ module IO::ByteFormat
   abstract def encode(int : UInt32, bytes : Bytes)
   abstract def encode(int : Int64, bytes : Bytes)
   abstract def encode(int : UInt64, bytes : Bytes)
+  abstract def encode(int : Int128, bytes : Bytes)
+  abstract def encode(int : UInt128, bytes : Bytes)
   abstract def encode(int : Float32, bytes : Bytes)
   abstract def encode(int : Float64, bytes : Bytes)
 
@@ -63,6 +67,8 @@ module IO::ByteFormat
   abstract def decode(int : UInt32.class, io : IO)
   abstract def decode(int : Int64.class, io : IO)
   abstract def decode(int : UInt64.class, io : IO)
+  abstract def decode(int : Int128.class, io : IO)
+  abstract def decode(int : UInt128.class, io : IO)
   abstract def decode(int : Float32.class, io : IO)
   abstract def decode(int : Float64.class, io : IO)
 
@@ -74,43 +80,41 @@ module IO::ByteFormat
   abstract def decode(int : UInt32.class, bytes : Bytes)
   abstract def decode(int : Int64.class, bytes : Bytes)
   abstract def decode(int : UInt64.class, bytes : Bytes)
+  abstract def decode(int : Int128.class, bytes : Bytes)
+  abstract def decode(int : UInt128.class, bytes : Bytes)
   abstract def decode(int : Float32.class, bytes : Bytes)
   abstract def decode(int : Float64.class, bytes : Bytes)
 
   def encode(float : Float32, io : IO)
-    encode(pointerof(float).as(Int32*).value, io)
+    encode(float.unsafe_as(Int32), io)
   end
 
   def encode(float : Float32, bytes : Bytes)
-    encode(pointerof(float).as(Int32*).value, bytes)
+    encode(float.unsafe_as(Int32), bytes)
   end
 
   def decode(type : Float32.class, io : IO)
-    int = decode(Int32, io)
-    pointerof(int).as(Float32*).value
+    decode(Int32, io).unsafe_as(Float32)
   end
 
   def decode(type : Float32.class, bytes : Bytes)
-    int = decode(Int32, bytes)
-    pointerof(int).as(Float32*).value
+    decode(Int32, bytes).unsafe_as(Float32)
   end
 
   def encode(float : Float64, io : IO)
-    encode(pointerof(float).as(Int64*).value, io)
+    encode(float.unsafe_as(Int64), io)
   end
 
   def encode(float : Float64, bytes : Bytes)
-    encode(pointerof(float).as(Int64*).value, bytes)
+    encode(float.unsafe_as(Int64), bytes)
   end
 
   def decode(type : Float64.class, io : IO)
-    int = decode(Int64, io)
-    pointerof(int).as(Float64*).value
+    decode(Int64, io).unsafe_as(Float64)
   end
 
   def decode(type : Float64.class, bytes : Bytes)
-    int = decode(Int64, bytes)
-    pointerof(int).as(Float64*).value
+    decode(Int64, bytes).unsafe_as(Float64)
   end
 
   module LittleEndian
@@ -126,17 +130,17 @@ module IO::ByteFormat
 
   {% for mod in %w(LittleEndian BigEndian) %}
     module {{mod.id}}
-      {% for type, i in %w(Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64) %}
+      {% for type, i in %w(Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 Int128 UInt128) %}
         {% bytesize = 2 ** (i / 2) %}
 
         def self.encode(int : {{type.id}}, io : IO)
-          buffer = pointerof(int).as(UInt8[{{bytesize}}]*).value
+          buffer = int.unsafe_as(StaticArray(UInt8, {{bytesize}}))
           buffer.reverse! unless SystemEndian == self
           io.write(buffer.to_slice)
         end
 
         def self.encode(int : {{type.id}}, bytes : Bytes)
-          buffer = pointerof(int).as(UInt8[{{bytesize}}]*).value
+          buffer = int.unsafe_as(StaticArray(UInt8, {{bytesize}}))
           buffer.reverse! unless SystemEndian == self
           buffer.to_slice.copy_to(bytes)
         end

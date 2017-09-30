@@ -7,7 +7,7 @@ private TimeSpecTicks = [
 ]
 
 def Time.expect_invalid
-  expect_raises ArgumentError, "invalid time" do
+  expect_raises ArgumentError, "Invalid time" do
     yield
   end
 end
@@ -61,6 +61,11 @@ describe Time do
     time = Time.epoch_ms(milliseconds)
     time.should eq(Time.new(2015, 8, 12, 18, 29, 15, kind: Time::Kind::Utc))
     time.epoch_ms.should eq(milliseconds)
+  end
+
+  it "clones" do
+    time = Time.now
+    (time == time.clone).should be_true
   end
 
   it "fields" do
@@ -270,6 +275,7 @@ describe Time do
   it "formats" do
     t = Time.new 2014, 1, 2, 3, 4, 5, 6
     t2 = Time.new 2014, 1, 2, 15, 4, 5, 6
+    t3 = Time.new 2014, 1, 2, 12, 4, 5, 6
 
     t.to_s("%Y").should eq("2014")
     Time.new(1, 1, 2, 3, 4, 5, 6).to_s("%Y").should eq("0001")
@@ -299,9 +305,11 @@ describe Time do
 
     t.to_s("%I").should eq("03")
     t2.to_s("%I").should eq("03")
+    t3.to_s("%I").should eq("12")
 
     t.to_s("%l").should eq(" 3")
     t2.to_s("%l").should eq(" 3")
+    t3.to_s("%l").should eq("12")
 
     # Note: we purposely match %p to am/pm and %P to AM/PM (makes more sense)
     t.to_s("%p").should eq("am")

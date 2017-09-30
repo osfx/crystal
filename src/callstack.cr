@@ -23,6 +23,14 @@ end
 
 # :nodoc:
 struct CallStack
+  # Compute current directory at the beginning so filenames
+  # are always shown relative to the *starting* working directory.
+  CURRENT_DIR = begin
+    dir = Process::INITIAL_PWD
+    dir += File::SEPARATOR unless dir.ends_with?(File::SEPARATOR)
+    dir
+  end
+
   @@skip = [] of String
 
   def self.skip(filename)
@@ -131,46 +139,88 @@ struct CallStack
     if frame
       offset, sname = frame
       if repeated_frame.count == 0
-        LibC.printf "[%ld] %s +%ld\n", repeated_frame.ip, sname, offset
+        LibC.dprintf 2, "[0x%lx] %s +%ld\n", repeated_frame.ip, sname, offset
       else
-        LibC.printf "[%ld] %s +%ld (%ld times)\n", repeated_frame.ip, sname, offset, repeated_frame.count + 1
+        LibC.dprintf 2, "[0x%lx] %s +%ld (%ld times)\n", repeated_frame.ip, sname, offset, repeated_frame.count + 1
       end
     else
       if repeated_frame.count == 0
-        LibC.printf "[%ld] ???\n", repeated_frame.ip
+        LibC.dprintf 2, "[0x%lx] ???\n", repeated_frame.ip
       else
-        LibC.printf "[%ld] ??? (%ld times)\n", repeated_frame.ip, repeated_frame.count + 1
+        LibC.dprintf 2, "[0x%lx] ??? (%ld times)\n", repeated_frame.ip, repeated_frame.count + 1
       end
     end
   end
 
   private def decode_backtrace
+    show_full_info = ENV["CRYSTAL_CALLSTACK_FULL_INFO"]? == "1"
+
     @callstack.compact_map do |ip|
-      file, line, column = CallStack.decode_line_number(ip)
-      if file == "??"
-        file_line_column = "??"
-      else
+      pc = CallStack.decode_address(ip)
+
+      file, line, column = CallStack.decode_line_number(pc)
+
+      if file && file != "??"
         next if @@skip.includes?(file)
-        file_line_column = "#{file} #{line}:#{column}"
+
+        # Turn to relative to the current dir, if possible
+        file = file.lchop(CURRENT_DIR)
+
+        file_line_column = "#{file}:#{line}:#{column}"
       end
 
-      if frame = CallStack.decode_frame(ip)
+      if name = CallStack.decode_function_name(pc)
+        function = name
+      elsif frame = CallStack.decode_frame(ip)
         _, sname = frame
         function = String.new(sname)
+
+        # We ignore these because they are part of `raise`'s internals,
+        # and we can't rely on a correct filename being available
+        # (for example if on Mac and without running `dsymutil`)
+        #
+        # We also ignore `main` because it's always at the same place
+        # and adds no info.
+        if function.starts_with?("*raise<") ||
+           function.starts_with?("*CallStack::") ||
+           function.starts_with?("*CallStack#")
+          next
+        end
+
+        # Crystal methods (their mangled name) start with `*`, so
+        # we remove that to have less clutter in the output.
+        function = function.lchop('*')
       else
         function = "???"
       end
 
-      "0x#{ip.address.to_s(16)}: #{function} at #{file_line_column}"
+      if file_line_column
+        if show_full_info && (frame = CallStack.decode_frame(ip))
+          _, sname = frame
+          line = "#{file_line_column} in '#{String.new(sname)}'"
+        else
+          line = "#{file_line_column} in '#{function}'"
+        end
+      else
+        line = function
+      end
+
+      if show_full_info
+        line = "#{line} at 0x#{ip.address.to_s(16)}"
+      end
+
+      line
     end
   end
 
   {% if flag?(:darwin) || flag?(:freebsd) || flag?(:linux) || flag?(:openbsd) %}
     @@dwarf_line_numbers : Debug::DWARF::LineNumbers?
+    @@dwarf_function_names : Array(Tuple(LibC::SizeT, LibC::SizeT, String))?
 
-    protected def self.decode_line_number(ip)
-      if ln = dwarf_line_numbers
-        if row = ln.find(decode_address(ip))
+    protected def self.decode_line_number(pc)
+      read_dwarf_sections unless @@dwarf_line_numbers
+      if ln = @@dwarf_line_numbers
+        if row = ln.find(pc)
           path = ln.files[row.file]?
           if dirname = ln.directories[row.directory]?
             path = "#{dirname}/#{path}"
@@ -181,13 +231,72 @@ struct CallStack
       {"??", 0, 0}
     end
 
+    protected def self.decode_function_name(pc)
+      read_dwarf_sections unless @@dwarf_function_names
+      if fn = @@dwarf_function_names
+        fn.each do |(low_pc, high_pc, function_name)|
+          return function_name if low_pc <= pc <= high_pc
+        end
+      end
+    end
+
+    protected def self.parse_function_names_from_dwarf(info, strings)
+      info.each do |code, abbrev, attributes|
+        next unless abbrev && abbrev.tag.subprogram?
+        name = low_pc = high_pc = nil
+
+        attributes.each do |(at, form, value)|
+          case at
+          when Debug::DWARF::AT::DW_AT_name
+            value = strings.try(&.decode(value.as(UInt32 | UInt64))) if form.strp?
+            name = value.as(String)
+          when Debug::DWARF::AT::DW_AT_low_pc
+            low_pc = value.as(LibC::SizeT)
+          when Debug::DWARF::AT::DW_AT_high_pc
+            if form.addr?
+              high_pc = value.as(LibC::SizeT)
+            elsif value.responds_to?(:to_i)
+              high_pc = low_pc.as(LibC::SizeT) + value.to_i
+            end
+          end
+        end
+
+        if low_pc && high_pc && name
+          yield low_pc, high_pc, name
+        end
+      end
+    end
+
     {% if flag?(:darwin) %}
       @@image_slide : LibC::Long?
 
-      protected def self.dwarf_line_numbers
-        @@dwarf_line_numbers ||= locate_dsym_bundle do |mach_o|
+      protected def self.read_dwarf_sections
+        locate_dsym_bundle do |mach_o|
           mach_o.read_section?("__debug_line") do |sh, io|
-            Debug::DWARF::LineNumbers.new(io, sh.size)
+            @@dwarf_line_numbers = Debug::DWARF::LineNumbers.new(io, sh.size)
+          end
+
+          strings = mach_o.read_section?("__debug_str") do |sh, io|
+            Debug::DWARF::Strings.new(io, sh.offset)
+          end
+
+          mach_o.read_section?("__debug_info") do |sh, io|
+            names = [] of {LibC::SizeT, LibC::SizeT, String}
+
+            while io.tell - sh.offset < sh.size
+              offset = io.tell - sh.offset
+              info = Debug::DWARF::Info.new(io, offset)
+
+              mach_o.read_section?("__debug_abbrev") do |sh, io|
+                info.read_abbreviations(io)
+              end
+
+              parse_function_names_from_dwarf(info, strings) do |name, low_pc, high_pc|
+                names << {name, low_pc, high_pc}
+              end
+            end
+
+            @@dwarf_function_names = names
           end
         end
       end
@@ -259,14 +368,37 @@ struct CallStack
     {% else %}
       @@base_address : UInt64|UInt32|Nil
 
-      protected def self.dwarf_line_numbers
-        @@dwarf_line_numbers ||= Debug::ELF.open(PROGRAM_NAME) do |elf|
+      protected def self.read_dwarf_sections
+        Debug::ELF.open(PROGRAM_NAME) do |elf|
           elf.read_section?(".text") do |sh, _|
             @@base_address = sh.addr - sh.offset
           end
 
           elf.read_section?(".debug_line") do |sh, io|
-            Debug::DWARF::LineNumbers.new(io, sh.size)
+            @@dwarf_line_numbers = Debug::DWARF::LineNumbers.new(io, sh.size)
+          end
+
+          strings = elf.read_section?(".debug_str") do |sh, io|
+            Debug::DWARF::Strings.new(io, sh.offset)
+          end
+
+          elf.read_section?(".debug_info") do |sh, io|
+            names = [] of {LibC::SizeT, LibC::SizeT, String}
+
+            while io.tell - sh.offset < sh.size
+              offset = io.tell - sh.offset
+              info = Debug::DWARF::Info.new(io, offset)
+
+              elf.read_section?(".debug_abbrev") do |sh, io|
+                info.read_abbreviations(io)
+              end
+
+              parse_function_names_from_dwarf(info, strings) do |name, low_pc, high_pc|
+                names << {name, low_pc, high_pc}
+              end
+            end
+
+            @@dwarf_function_names = names
           end
         end
       end
@@ -287,8 +419,16 @@ struct CallStack
       end
     {% end %}
   {% else %}
-    def self.decode_line_number(ip)
+    def self.decode_address(ip)
+      ip
+    end
+
+    def self.decode_line_number(pc)
       {"??", 0, 0}
+    end
+
+    def self.decode_function_name(pc)
+      nil
     end
   {% end %}
 

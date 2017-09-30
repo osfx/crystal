@@ -14,7 +14,7 @@ module FileUtils
     Dir.cd(path)
   end
 
-  # Changes the current working firectory of the process to the given string *path*
+  # Changes the current working directory of the process to the given string *path*
   # and invoked the block, restoring the original working directory when the block exits.
   #
   # ```
@@ -67,6 +67,34 @@ module FileUtils
     end
   end
 
+  # Attempts to set the access and modification times of the file named
+  # in the *path* parameter to the value given in *time*.
+  #
+  # If the file does not exist, it will be created.
+  #
+  # ```
+  # FileUtils.touch("afile.cr")
+  # ```
+  #
+  # NOTE: Alias of `File.touch`
+  def touch(path : String, time : Time = Time.now)
+    File.touch(path, time)
+  end
+
+  # Attempts to set the access and modification times of each file given
+  # in the *paths* parameter to the value given in *time*.
+  #
+  # If the file does not exist, it will be created.
+  #
+  # ```
+  # FileUtils.touch(["foo", "bar"])
+  # ```
+  def touch(paths : Enumerable(String), time : Time = Time.now)
+    paths.each do |path|
+      touch(path, time)
+    end
+  end
+
   # Copies the file *src_path* to the file or directory *dest*.
   # If *dest* is a directory, a file with the same basename as *src_path* is created in *dest*
   # Permission bits are copied too.
@@ -93,7 +121,7 @@ module FileUtils
   # FileUtils.cp({"bar.cr", "afile"}, "files")
   # ```
   def cp(srcs : Enumerable(String), dest : String)
-    raise ArgumentError.new("no such directory : #{dest}") unless Dir.exists?(dest)
+    raise ArgumentError.new("No such directory : #{dest}") unless Dir.exists?(dest)
     srcs.each do |src|
       cp(src, dest)
     end
@@ -108,14 +136,10 @@ module FileUtils
   def cp_r(src_path : String, dest_path : String)
     if Dir.exists?(src_path)
       Dir.mkdir(dest_path)
-      Dir.open(src_path) do |dir|
-        dir.each do |entry|
-          if entry != "." && entry != ".."
-            src = File.join(src_path, entry)
-            dest = File.join(dest_path, entry)
-            cp_r(src, dest)
-          end
-        end
+      Dir.each_child(src_path) do |entry|
+        src = File.join(src_path, entry)
+        dest = File.join(dest_path, entry)
+        cp_r(src, dest)
       end
     else
       cp(src_path, dest_path)
@@ -189,7 +213,7 @@ module FileUtils
   # FileUtils.mv(["foo", "bar"], "src")
   # ```
   def mv(srcs : Enumerable(String), dest : String) : Nil
-    raise ArgumentError.new("no such directory : #{dest}") unless Dir.exists?(dest)
+    raise ArgumentError.new("No such directory : #{dest}") unless Dir.exists?(dest)
     srcs.each do |src|
       begin
         mv(src, File.join(dest, File.basename(src)))
@@ -240,13 +264,9 @@ module FileUtils
   # ```
   def rm_r(path : String) : Nil
     if Dir.exists?(path) && !File.symlink?(path)
-      Dir.open(path) do |dir|
-        dir.each do |entry|
-          if entry != "." && entry != ".."
-            src = File.join(path, entry)
-            rm_r(src)
-          end
-        end
+      Dir.each_child(path) do |entry|
+        src = File.join(path, entry)
+        rm_r(src)
       end
       Dir.rmdir(path)
     else

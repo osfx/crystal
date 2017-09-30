@@ -29,7 +29,7 @@ class Gzip::Header
     io.read_fully(header.to_slice + 1)
 
     if header[0] != ID1 || header[1] != ID2 || header[2] != DEFLATE
-      raise Error.new("invalid gzip header")
+      raise Error.new("Invalid gzip header")
     end
 
     flg = Flg.new(header[3])
@@ -71,7 +71,7 @@ class Gzip::Header
 
     # flg
     flg = Flg::None
-    flg |= Flg::EXTRA if @extra
+    flg |= Flg::EXTRA unless @extra.empty?
     flg |= Flg::NAME if @name
     flg |= Flg::COMMENT if @comment
     io.write_byte flg.value
@@ -85,9 +85,9 @@ class Gzip::Header
     # os
     io.write_byte os
 
-    if extra = @extra
-      io.write_byte extra.size.to_u8
-      io.write(extra)
+    unless @extra.empty?
+      io.write_byte @extra.size.to_u8
+      io.write(@extra)
     end
 
     if name = @name

@@ -29,10 +29,10 @@ class Flate::Reader
     @end = false
   end
 
-  # Creates an instance of Flate::Reader, yields it to the given block, and closes
-  # it at its end.
-  def self.new(input : IO, sync_close : Bool = false, dict : Bytes? = nil)
-    reader = new input, sync_close: sync_close, dict: dict
+  # Creates a new reader from the given *io*, yields it to the given block,
+  # and closes it at its end.
+  def self.open(io : IO, sync_close : Bool = false, dict : Bytes? = nil)
+    reader = new(io, sync_close: sync_close, dict: dict)
     yield reader ensure reader.close
   end
 
@@ -51,7 +51,7 @@ class Flate::Reader
 
   # Always raises `IO::Error` because this is a read-only `IO`.
   def write(slice : Bytes)
-    raise IO::Error.new "can't write to Flate::Reader"
+    raise IO::Error.new "Can't write to Flate::Reader"
   end
 
   # See `IO#read`.
@@ -77,7 +77,6 @@ class Flate::Reader
           @stream.next_in = @buf.to_unsafe
           @stream.avail_in = @io.read(@buf.to_slice).to_u32
         end
-        return 0 if @stream.avail_in == 0
       end
 
       old_avail_in = @stream.avail_in

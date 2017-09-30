@@ -285,4 +285,30 @@ describe "Semantic: named tuples" do
       a[0]
       )) { named_tuple_of({"x": types["Foo"].virtual_type!, "y": types["Foo"].virtual_type!}) }
   end
+
+  it "does not compile to_h of empty tuples" do
+    # TODO change the location of this spec upon #2391
+    assert_error %(
+      require "prelude"
+      NamedTuple.new.to_h
+      ),
+      "Can't convert an empty NamedTuple to a Hash"
+  end
+
+  it "types T as a tuple of metaclasses" do
+    assert_type("
+      struct NamedTuple
+        def named_args
+          T
+        end
+      end
+
+      x = {a: 1, b: 1.5, c: 'a'}
+      x.named_args
+      ") do
+      meta = named_tuple_of({"a": int32, "b": float64, "c": char}).metaclass
+      meta.metaclass?.should be_true
+      meta
+    end
+  end
 end

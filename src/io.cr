@@ -85,81 +85,9 @@ module IO
   class Timeout < Exception
   end
 
-  def self.select(read_ios, write_ios = nil, error_ios = nil)
-    self.select(read_ios, write_ios, error_ios, nil).not_nil!
-  end
-
-  # Returns an array of all given IOs that are
-  # * ready to read if they appeared in *read_ios*
-  # * ready to write if they appeared in *write_ios*
-  # * have an error condition if they appeared in *error_ios*
-  #
-  # If the optional *timeout_sec* is given, `nil` is returned if no
-  # `IO` was ready after the specified amount of seconds passed. Fractions
-  # are supported.
-  #
-  # If timeout_sec is `nil`, this method blocks until an `IO` is ready.
-  def self.select(read_ios, write_ios, error_ios, timeout_sec : LibC::TimeT | Int | Float?)
-    nfds = 0
-    read_ios.try &.each do |io|
-      nfds = io.fd if io.fd > nfds
-    end
-    write_ios.try &.each do |io|
-      nfds = io.fd if io.fd > nfds
-    end
-    error_ios.try &.each do |io|
-      nfds = io.fd if io.fd > nfds
-    end
-    nfds += 1
-
-    read_fdset = FDSet.from_ios(read_ios)
-    write_fdset = FDSet.from_ios(write_ios)
-    error_fdset = FDSet.from_ios(error_ios)
-
-    if timeout_sec
-      sec = LibC::TimeT.new(timeout_sec)
-
-      if timeout_sec.is_a? Float
-        usec = (timeout_sec - sec) * 10e6
-      else
-        usec = 0
-      end
-
-      timeout = LibC::Timeval.new
-      timeout.tv_sec = sec
-      timeout.tv_usec = LibC::SusecondsT.new(usec)
-      timeout_ptr = pointerof(timeout)
-    else
-      timeout_ptr = Pointer(LibC::Timeval).null
-    end
-
-    readfds_ptr = pointerof(read_fdset).as(LibC::FdSet*)
-    writefds_ptr = pointerof(write_fdset).as(LibC::FdSet*)
-    errorfds_ptr = pointerof(error_fdset).as(LibC::FdSet*)
-
-    ret = LibC.select(nfds, readfds_ptr, writefds_ptr, errorfds_ptr, timeout_ptr)
-    case ret
-    when 0 # Timeout
-      nil
-    when -1
-      raise Errno.new("Error waiting with select()")
-    else
-      ios = [] of IO
-      read_ios.try &.each do |io|
-        ios << io if read_fdset.set?(io)
-      end
-      write_ios.try &.each do |io|
-        ios << io if write_fdset.set?(io)
-      end
-      error_ios.try &.each do |io|
-        ios << io if error_fdset.set?(io)
-      end
-      ios
-    end
-  end
-
   # Reads at most *slice.size* bytes from this `IO` into *slice*.
-  # Returns the number of bytes read.
+  # Returns the number of bytes read, which is 0 if and only if there is no
+  # more data to read (so checking for 0 is the way to detect end of file).
   #
   # ```
   # io = IO::Memory.new "hello"
@@ -168,6 +96,7 @@ module IO
   # slice          # => Bytes[104, 101, 108, 108]
   # io.read(slice) # => 1
   # slice          # => Bytes[111, 101, 108, 108]
+  # io.read(slice) # => 0
   # ```
   abstract def read(slice : Bytes)
 
@@ -195,7 +124,7 @@ module IO
   end
 
   protected def check_open
-    raise IO::Error.new "closed stream" if closed?
+    raise IO::Error.new "Closed stream" if closed?
   end
 
   # Flushes buffered data, if any.
@@ -392,8 +321,12 @@ module IO
   private def read_char_with_bytesize
     # For UTF-8 encoding, try to see if we can peek 4 bytes.
     # If so, this will be faster than reading byte per byte.
-    if !decoder && (peek = self.peek) && peek.size == 4
-      read_char_with_bytesize_peek(peek)
+    if !decoder && (peek = self.peek)
+      if peek.empty?
+        return nil
+      else
+        return read_char_with_bytesize_peek(peek)
+      end
     else
       read_char_with_bytesize_slow
     end
@@ -401,26 +334,23 @@ module IO
 
   private def read_char_with_bytesize_peek(peek)
     first = peek[0].to_u32
+    skip(1)
     if first < 0x80
-      skip(1)
       return first.unsafe_chr, 1
     end
 
-    second = (peek[1] & 0x3f).to_u32
+    second = peek_or_read_masked(peek, 1)
     if first < 0xe0
-      skip(2)
       return ((first & 0x1f) << 6 | second).unsafe_chr, 2
     end
 
-    third = (peek[2] & 0x3f).to_u32
+    third = peek_or_read_masked(peek, 2)
     if first < 0xf0
-      skip(3)
       return ((first & 0x0f) << 12 | (second << 6) | third).unsafe_chr, 3
     end
 
-    fourth = (peek[3] & 0x3f).to_u32
+    fourth = peek_or_read_masked(peek, 3)
     if first < 0xf8
-      skip(4)
       return ((first & 0x07) << 18 | (second << 12) | (third << 6) | fourth).unsafe_chr, 4
     end
 
@@ -449,6 +379,15 @@ module IO
   private def read_utf8_masked_byte
     byte = read_utf8_byte || raise InvalidByteSequenceError.new("Incomplete UTF-8 byte sequence")
     (byte & 0x3f).to_u32
+  end
+
+  private def peek_or_read_masked(peek, index)
+    if byte = peek[index]?
+      skip(1)
+      (byte & 0x3f).to_u32
+    else
+      read_utf8_masked_byte
+    end
   end
 
   # Reads a single decoded UTF-8 byte from this `IO`.
@@ -527,9 +466,10 @@ module IO
 
   # Peeks into this IO, if possible.
   #
-  # If this IO can peek into some data, it returns a slice
-  # with that data. Returns `nil` if this IO isn't peekable,
-  # or if there's no data to peek.
+  # It returns:
+  # - `nil` if this IO isn't peekable
+  # - an empty slice if it is, but EOF was reached
+  # - a non-empty slice if some data can be peeked
   #
   # The returned bytes are only valid data until a next call
   # to any method that reads from this IO is invoked.
@@ -618,7 +558,7 @@ module IO
           decoder.write(str)
         end
       else
-        buffer = uninitialized UInt8[2048]
+        buffer = uninitialized UInt8[4096]
         while (read_bytes = read(buffer.to_slice)) > 0
           str.write buffer.to_slice[0, read_bytes]
         end
@@ -684,7 +624,7 @@ module IO
   # io.gets('w', 10) # => nil
   # ```
   def gets(delimiter : Char, limit : Int, chomp = false) : String?
-    raise ArgumentError.new "negative limit" if limit < 0
+    raise ArgumentError.new "Negative limit" if limit < 0
 
     ascii = delimiter.ascii?
     decoder = decoder()
@@ -698,7 +638,11 @@ module IO
     # If there's no encoding, the delimiter is ASCII and we can peek,
     # use a faster algorithm
     if ascii && !decoder && (peek = self.peek)
-      gets_peek(delimiter, limit, chomp, peek)
+      if peek.empty?
+        nil
+      else
+        gets_peek(delimiter, limit, chomp, peek)
+      end
     else
       gets_slow(delimiter, limit, chomp)
     end
@@ -756,7 +700,7 @@ module IO
           peek = self.peek
         end
 
-        unless peek
+        if !peek || peek.empty?
           if buffer.bytesize == 0
             return nil
           else
@@ -786,7 +730,7 @@ module IO
     buffer = String::Builder.new
     total = 0
     while true
-      info = read_char_with_bytesize
+      info = read_char_with_bytesize_slow
       unless info
         return buffer.empty? ? nil : buffer.to_s
       end
@@ -795,7 +739,7 @@ module IO
 
       # Consider the case of \r\n when the delimiter is \n and chomp = true
       if chomp_rn && char == '\r'
-        info2 = read_char_with_bytesize
+        info2 = read_char_with_bytesize_slow
         unless info2
           buffer << char
           break
@@ -874,7 +818,7 @@ module IO
   end
 
   # Same as `gets`, but raises `EOFError` if called at the end of this `IO`.
-  def read_line(*args, **options) : String?
+  def read_line(*args, **options) : String
     gets(*args, **options) || raise EOFError.new
   end
 
@@ -941,7 +885,7 @@ module IO
   # `from_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)`
   # method can be read in this way.
   #
-  # See `Int#from_io` and `Float#from_io`.
+  # See `Int.from_io` and `Float.from_io`.
   #
   # ```
   # io = IO::Memory.new
@@ -1002,7 +946,7 @@ module IO
     LineIterator.new(self, args, options)
   end
 
-  # Inovkes the given block with each `Char` in this `IO`.
+  # Invokes the given block with each `Char` in this `IO`.
   #
   # ```
   # io = IO::Memory.new("あめ")
@@ -1035,7 +979,7 @@ module IO
     CharIterator.new(self)
   end
 
-  # Inovkes the given block with each byte (`UInt8`) in this `IO`.
+  # Invokes the given block with each byte (`UInt8`) in this `IO`.
   #
   # ```
   # io = IO::Memory.new("aあ")
@@ -1075,7 +1019,7 @@ module IO
   # Rewinds this `IO`. By default this method raises, but including types
   # may implement it.
   def rewind
-    raise IO::Error.new("can't rewind")
+    raise IO::Error.new("Can't rewind")
   end
 
   # Sets the encoding of this `IO`.
@@ -1115,7 +1059,7 @@ module IO
   # io2.to_s # => "hello"
   # ```
   def self.copy(src, dst)
-    buffer = uninitialized UInt8[1024]
+    buffer = uninitialized UInt8[4096]
     count = 0
     while (len = src.read(buffer.to_slice).to_i32) > 0
       dst.write buffer.to_slice[0, len]
@@ -1135,9 +1079,9 @@ module IO
   # io2.to_s # => "hel"
   # ```
   def self.copy(src, dst, limit : Int)
-    raise ArgumentError.new("negative limit") if limit < 0
+    raise ArgumentError.new("Negative limit") if limit < 0
 
-    buffer = uninitialized UInt8[1024]
+    buffer = uninitialized UInt8[4096]
     remaining = limit
     while (len = src.read(buffer.to_slice[0, Math.min(buffer.size, Math.max(remaining, 0))])) > 0
       dst.write buffer.to_slice[0, len]

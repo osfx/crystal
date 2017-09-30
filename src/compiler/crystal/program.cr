@@ -110,8 +110,8 @@ module Crystal
     # The main filename of this program
     property filename : String?
 
-    # If `true`, prints time and memory stats to `stdout`.
-    property? wants_stats = false
+    # Set to a `ProgressTracker` object which tracks compilation progress.
+    property progress_tracker = ProgressTracker.new
 
     def initialize
       super(self, self, "main")
@@ -150,6 +150,8 @@ module Crystal
       types["UInt32"] = @uint32 = IntegerType.new self, self, "UInt32", int, 4, 6, :u32
       types["Int64"] = @int64 = IntegerType.new self, self, "Int64", int, 8, 7, :i64
       types["UInt64"] = @uint64 = IntegerType.new self, self, "UInt64", int, 8, 8, :u64
+      types["Int128"] = @int128 = IntegerType.new self, self, "Int128", int, 16, 9, :i128
+      types["UInt128"] = @uint128 = IntegerType.new self, self, "UInt128", int, 16, 10, :u128
 
       types["Float"] = float = @float = NonGenericClassType.new self, self, "Float", number
       abstract_value_type(float)
@@ -179,7 +181,6 @@ module Crystal
       string.declare_instance_var("@c", uint8)
 
       types["Class"] = klass = @class = MetaclassType.new(self, object, value, "Class")
-      klass.metaclass = klass
       klass.allowed_in_generics = false
 
       types["Struct"] = struct_t = @struct_t = NonGenericClassType.new self, self, "Struct", value
@@ -242,6 +243,7 @@ module Crystal
       define_crystal_string_constant "DESCRIPTION", Crystal::Config.description
       define_crystal_string_constant "PATH", Crystal::CrystalPath.default_path
       define_crystal_string_constant "VERSION", version
+      define_crystal_string_constant "LLVM_VERSION", Crystal::Config.llvm_version
     end
 
     private def define_crystal_string_constant(name, value)
@@ -258,7 +260,7 @@ module Crystal
 
     setter target_machine : LLVM::TargetMachine?
 
-    getter(target_machine) { TargetMachine.create(LLVM.default_target_triple) }
+    getter(target_machine) { TargetMachine.create(Crystal::Config.default_target_triple) }
 
     # Returns the `Type` for `Array(type)`
     def array_of(type)
@@ -426,8 +428,8 @@ module Crystal
       crystal_path.find filename, relative_to
     end
 
-    {% for name in %w(object no_return value number reference void nil bool char int int8 int16 int32 int64
-                     uint8 uint16 uint32 uint64 float float32 float64 string symbol pointer array static_array
+    {% for name in %w(object no_return value number reference void nil bool char int int8 int16 int32 int64 int128
+                     uint8 uint16 uint32 uint64 uint128 float float32 float64 string symbol pointer array static_array
                      exception tuple named_tuple proc union enum range regex crystal) %}
       def {{name.id}}
         @{{name.id}}.not_nil!
@@ -446,17 +448,19 @@ module Crystal
 
     def type_from_literal_kind(kind)
       case kind
-      when :i8  then int8
-      when :i16 then int16
-      when :i32 then int32
-      when :i64 then int64
-      when :u8  then uint8
-      when :u16 then uint16
-      when :u32 then uint32
-      when :u64 then uint64
-      when :f32 then float32
-      when :f64 then float64
-      else           raise "Invalid node kind: #{kind}"
+      when :i8   then int8
+      when :i16  then int16
+      when :i32  then int32
+      when :i64  then int64
+      when :i128 then int128
+      when :u8   then uint8
+      when :u16  then uint16
+      when :u32  then uint32
+      when :u64  then uint64
+      when :u128 then uint128
+      when :f32  then float32
+      when :f64  then float64
+      else            raise "Invalid node kind: #{kind}"
       end
     end
 

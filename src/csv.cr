@@ -91,7 +91,7 @@ class CSV
   # ["three"]
   # ```
   def self.each_row(string_or_io : String | IO, separator : Char = DEFAULT_SEPARATOR, quote_char : Char = DEFAULT_QUOTE_CHAR)
-    Parser.new(string_or_io).each_row do |row|
+    Parser.new(string_or_io, separator, quote_char).each_row do |row|
       yield row
     end
   end
@@ -106,7 +106,7 @@ class CSV
   # rows.next # => ["three"]
   # ```
   def self.each_row(string_or_io : String | IO, separator : Char = DEFAULT_SEPARATOR, quote_char : Char = DEFAULT_QUOTE_CHAR)
-    Parser.new(string_or_io).each_row
+    Parser.new(string_or_io, separator, quote_char).each_row
   end
 
   # Builds a CSV. This yields a `CSV::Builder` to the given block.
@@ -185,7 +185,7 @@ class CSV
   # Returns this CSV headers. Their values are always stripped.
   # Raises `CSV::Error` if headers were not requested.
   def headers : Array(String)
-    @headers || raise(Error.new("headers not requested"))
+    @headers || raise(Error.new("Headers not requested"))
   end
 
   # Invokes the block once for each row in this CSV, yielding `self`.
@@ -254,6 +254,22 @@ class CSV
     row_internal[header_pattern]?
   end
 
+  # Returns a tuple of the current row's values at given indices
+  # A negative index counts from the end.
+  # Raises `IndexError` if any column doesn't exist
+  # The behavior of returning a tuple is similar to `Hash#values_at`
+  def values_at(*columns : Int)
+    columns.map { |column| row_internal[column] }
+  end
+
+  # Returns a tuple of the current row's values corresponding to the given *headers*
+  # Raises `KeyError` if any header doesn't exist.
+  # Raises `CSV::Error` if headers were not requested
+  # The behavior of returning a tuple is similar to `Hash#values_at`
+  def values_at(*headers : String)
+    headers.map { |header| row_internal[header] }
+  end
+
   # Returns the current row as a `Row` instance.
   def row : Row
     Row.new(self, current_row.dup)
@@ -268,15 +284,15 @@ class CSV
     return row if row
 
     if @traversed
-      raise Error.new("after last row")
+      raise Error.new("After last row")
     else
-      raise Error.new("before first row")
+      raise Error.new("Before first row")
     end
   end
 
   # :nodoc:
   def indices
-    @indices || raise(Error.new("headers not requested"))
+    @indices || raise(Error.new("Headers not requested"))
   end
 
   # :nodoc:
@@ -379,6 +395,22 @@ class CSV
         h[header] = maybe_strip(@row[i]? || "")
       end
       h
+    end
+
+    # Returns a tuple of this row's values at given indices
+    # A negative index counts from the end.
+    # Raises `IndexError` if any column doesn't exist
+    # The behavior of returning a tuple is similar to `Hash#values_at`
+    def values_at(*columns : Int)
+      columns.map { |column| self[column] }
+    end
+
+    # Returns a tuple of this row's values corresponding to the given *headers*
+    # Raises `KeyError` if any header doesn't exist.
+    # Raises `CSV::Error` if headers were not requested
+    # The behavior of returning a tuple is similar to `Hash#values_at`
+    def values_at(*headers : String)
+      headers.map { |header| self[header] }
     end
 
     private def maybe_strip(value)

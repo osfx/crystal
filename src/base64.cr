@@ -20,12 +20,12 @@ module Base64
 
   class Error < Exception; end
 
-  private CHARS_STD = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  private CHARS_STD  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
   private CHARS_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-  private LINE_SIZE = 60
-  private PAD = '='.ord.to_u8
-  private NL = '\n'.ord.to_u8
-  private NR = '\r'.ord.to_u8
+  private LINE_SIZE  = 60
+  private PAD        = '='.ord.to_u8
+  private NL         = '\n'.ord.to_u8
+  private NR         = '\r'.ord.to_u8
 
   # Returns the base64-encoded version of *data*.
   # This method complies with [RFC 2045](https://tools.ietf.org/html/rfc2045).
@@ -179,8 +179,6 @@ module Base64
   end
 
   # Returns the base64-decoded version of *data* as a string.
-  # If the data doesn't decode to a valid UTF8 string,
-  # ` InvalidByteSequenceError` will be raised.
   # This will decode either the normal or urlsafe alphabets.
   def decode_string(data) : String
     slice = data.to_slice

@@ -1,4 +1,4 @@
-require "../../spec_helper"
+require "../../support/syntax"
 
 private def it_lexes(string, type)
   it "lexes #{string.inspect}" do
@@ -53,6 +53,10 @@ private def it_lexes_i64(values)
   values.each { |value| it_lexes_number :i64, value }
 end
 
+private def it_lexes_i128(values)
+  values.each { |value| it_lexes_number :i128, value }
+end
+
 private def it_lexes_u64(values)
   values.each { |value| it_lexes_number :u64, value }
 end
@@ -79,6 +83,17 @@ private def it_lexes_char(string, value)
     token = lexer.next_token
     token.type.should eq(:CHAR)
     token.value.as(Char).should eq(value)
+  end
+end
+
+private def it_lexes_string(string, value)
+  it "lexes #{string}" do
+    lexer = Lexer.new string
+    token = lexer.next_token
+    token.type.should eq(:DELIMITER_START)
+
+    token = lexer.next_string_token(token.delimiter_state)
+    token.value.should eq(value)
   end
 end
 
@@ -140,6 +155,7 @@ describe "Lexer" do
   it_lexes_i32 ["1", ["0i32", "0"], ["1hello", "1"], "+1", "-1", "1234", "+1234", "-1234",
                 ["1.foo", "1"], ["1_000", "1000"], ["100_000", "100000"]]
   it_lexes_i64 [["1i64", "1"], ["1_i64", "1"], ["1i64hello", "1"], ["+1_i64", "+1"], ["-1_i64", "-1"]]
+  it_lexes_i128 [["1i128", "1"], ["1_i128", "1"], ["1i128hello", "1"], ["+1_i128", "+1"], ["-1_i128", "-1"]]
   it_lexes_f32 [["0f32", "0"], ["0_f32", "0"], ["1.0f32", "1.0"], ["1.0f32hello", "1.0"],
                 ["+1.0f32", "+1.0"], ["-1.0f32", "-1.0"], ["-0.0f32", "-0.0"], ["1_234.567_890_f32", "1234.567890"]]
   it_lexes_f64 ["1.0", ["1.0hello", "1.0"], "+1.0", "-1.0", ["1_234.567_890", "1234.567890"]]
@@ -169,6 +185,9 @@ describe "Lexer" do
 
   it_lexes_number :u64, ["1u64", "1"]
   it_lexes_number :u64, ["1_u64", "1"]
+
+  it_lexes_number :u128, ["1u128", "1"]
+  it_lexes_number :u128, ["1_u128", "1"]
 
   it_lexes_number :f32, ["1f32", "1"]
   it_lexes_number :f32, ["1.0f32", "1.0"]
@@ -221,11 +240,6 @@ describe "Lexer" do
   it_lexes_char "'\\0'", '\0'
   it_lexes_char "'\\''", '\''
   it_lexes_char "'\\\\'", '\\'
-  it_lexes_char "'\\1'", '\1'
-  it_lexes_char "'\\4'", 4.chr
-  it_lexes_char "'\\10'", 8.chr
-  it_lexes_char "'\\110'", 72.chr
-  it_lexes_char "'\\8'", '8'
   assert_syntax_error "'", "unterminated char literal"
   assert_syntax_error "'\\", "unterminated char literal"
   it_lexes_operators [:"=", :"<", :"<=", :">", :">=", :"+", :"-", :"*", :"(", :")",
@@ -445,8 +459,33 @@ describe "Lexer" do
     token.type.should eq(:"/=")
   end
 
+  it "lexes != after identifier (#4815)" do
+    lexer = Lexer.new("some_method!=5")
+    token = lexer.next_token
+    token.type.should eq(:IDENT)
+    token.value.should eq("some_method")
+    token = lexer.next_token
+    token.type.should eq(:"!=")
+    token = lexer.next_token
+    token.type.should eq(:NUMBER)
+  end
+
   assert_syntax_error "'\\uFEDZ'", "expected hexadecimal character in unicode escape"
   assert_syntax_error "'\\u{}'", "expected hexadecimal character in unicode escape"
   assert_syntax_error "'\\u{110000}'", "invalid unicode codepoint (too large)"
   assert_syntax_error ":+1", "unexpected token"
+
+  assert_syntax_error "'\\1'", "invalid char escape sequence"
+
+  it_lexes_string %("\\1"), String.new(Bytes[1])
+  it_lexes_string %("\\4"), String.new(Bytes[4])
+  it_lexes_string %("\\10"), String.new(Bytes[8])
+  it_lexes_string %("\\110"), String.new(Bytes[72])
+  it_lexes_string %("\\8"), "8"
+  assert_syntax_error %("\\400"), "octal value too big"
+
+  it_lexes_string %("\\x12"), String.new(Bytes[0x12])
+  it_lexes_string %("\\xFF"), String.new(Bytes[0xFF])
+  assert_syntax_error %("\\xz"), "invalid hex escape"
+  assert_syntax_error %("\\x1z"), "invalid hex escape"
 end

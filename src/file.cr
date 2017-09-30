@@ -37,7 +37,7 @@ class File < IO::FileDescriptor
 
   protected def open_flag(mode)
     if mode.size == 0
-      raise "invalid access mode #{mode}"
+      raise "Invalid access mode #{mode}"
     end
 
     m = 0
@@ -52,7 +52,7 @@ class File < IO::FileDescriptor
       m = LibC::O_WRONLY
       o = LibC::O_CREAT | LibC::O_APPEND
     else
-      raise "invalid access mode #{mode}"
+      raise "Invalid access mode #{mode}"
     end
 
     case mode.size
@@ -65,10 +65,10 @@ class File < IO::FileDescriptor
       when 'b'
         # Nothing
       else
-        raise "invalid access mode #{mode}"
+        raise "Invalid access mode #{mode}"
       end
     else
-      raise "invalid access mode #{mode}"
+      raise "Invalid access mode #{mode}"
     end
 
     oflag = m | o
@@ -390,7 +390,7 @@ class File < IO::FileDescriptor
   # Creates a new link (also known as a hard link) at *new_path* to an existing file
   # given by *old_path*.
   def self.link(old_path, new_path)
-    ret = LibC.symlink(old_path.check_no_null_byte, new_path.check_no_null_byte)
+    ret = LibC.link(old_path.check_no_null_byte, new_path.check_no_null_byte)
     raise Errno.new("Error creating link from #{old_path} to #{new_path}") if ret != 0
     ret
   end
@@ -502,10 +502,10 @@ class File < IO::FileDescriptor
   # File.write("foo", "bar")
   # ```
   #
-  # If the content is a `Slice(UInt8)`, those bytes will be written. If it's
-  # an `IO`, all bytes from the `IO` will be written. Otherwise, the string
-  # representation of *content* will be written (the result of invoking `to_s`
-  # on *content*)
+  # NOTE: If the content is a `Slice(UInt8)`, those bytes will be written.
+  # If it's an `IO`, all bytes from the `IO` will be written.
+  # Otherwise, the string representation of *content* will be written
+  # (the result of invoking `to_s` on *content*).
   def self.write(filename, content, perm = DEFAULT_CREATE_MODE, encoding = nil, invalid = nil)
     File.open(filename, "w", perm, encoding: encoding, invalid: invalid) do |file|
       case content
@@ -595,6 +595,15 @@ class File < IO::FileDescriptor
     end
   end
 
+  # Attempts to set the access and modification times of the file named
+  # in the *filename* parameter to the value given in *time*.
+  #
+  # If the file does not exist, it will be created.
+  def self.touch(filename : String, time : Time = Time.now)
+    open(filename, "a") { } unless exists?(filename)
+    utime time, time, filename
+  end
+
   private def self.to_timeval(time : Time)
     t = uninitialized LibC::Timeval
     t.tv_sec = typeof(t.tv_sec).new(time.to_local.epoch)
@@ -624,15 +633,15 @@ class File < IO::FileDescriptor
     self_bytesize = self.size
 
     unless 0 <= offset <= self_bytesize
-      raise ArgumentError.new("offset out of bounds")
+      raise ArgumentError.new("Offset out of bounds")
     end
 
     if bytesize < 0
-      raise ArgumentError.new("negative bytesize")
+      raise ArgumentError.new("Negative bytesize")
     end
 
     unless 0 <= offset + bytesize <= self_bytesize
-      raise ArgumentError.new("bytesize out of bounds")
+      raise ArgumentError.new("Bytesize out of bounds")
     end
 
     io = PReader.new(fd, offset, bytesize)

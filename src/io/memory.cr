@@ -101,7 +101,7 @@ class IO::Memory
     slice.copy_to(@buffer + @pos, count)
 
     if @pos > @bytesize
-      Intrinsics.memset((@buffer + @bytesize).as(Void*), 0_u8, (@pos - @bytesize).to_u32, 0_u32, false)
+      (@buffer + @bytesize).clear(@pos - @bytesize)
     end
 
     @pos += count
@@ -125,7 +125,7 @@ class IO::Memory
     (@buffer + @pos).value = byte
 
     if @pos > @bytesize
-      Intrinsics.memset((@buffer + @bytesize).as(Void*), 0_u8, (@pos - @bytesize).to_u32, 0_u32, false)
+      (@buffer + @bytesize).clear(@pos - @bytesize)
     end
 
     @pos += 1
@@ -140,7 +140,7 @@ class IO::Memory
 
     check_open
 
-    raise ArgumentError.new "negative limit" if limit < 0
+    raise ArgumentError.new "Negative limit" if limit < 0
 
     index = (@buffer + @pos).to_slice(@bytesize - @pos).index(delimiter.ord)
     if index
@@ -192,8 +192,7 @@ class IO::Memory
   def peek
     check_open
 
-    peek = Slice.new(@buffer + @pos, @bytesize - @pos)
-    peek.empty? ? nil : peek
+    Slice.new(@buffer + @pos, @bytesize - @pos)
   end
 
   # :nodoc:
@@ -226,7 +225,9 @@ class IO::Memory
     if pos == @bytesize
       ""
     else
-      String.new(@buffer + @pos, @bytesize - @pos)
+      String.new(@buffer + @pos, @bytesize - @pos).tap do
+        @pos = @bytesize
+      end
     end
   end
 
@@ -337,7 +338,7 @@ class IO::Memory
   # io.gets # => "lo"
   # ```
   def pos=(value)
-    raise ArgumentError.new("negative pos") if value < 0
+    raise ArgumentError.new("Negative pos") if value < 0
 
     @pos = value.to_i
   end
@@ -348,15 +349,15 @@ class IO::Memory
   # so multiple concurrent open are allowed.
   def read_at(offset, bytesize)
     unless 0 <= offset <= @bytesize
-      raise ArgumentError.new("offset out of bounds")
+      raise ArgumentError.new("Offset out of bounds")
     end
 
     if bytesize < 0
-      raise ArgumentError.new("negative bytesize")
+      raise ArgumentError.new("Negative bytesize")
     end
 
     unless 0 <= offset + bytesize <= @bytesize
-      raise ArgumentError.new("bytesize out of bounds")
+      raise ArgumentError.new("Bytesize out of bounds")
     end
 
     old_writeable = @writeable
@@ -407,33 +408,32 @@ class IO::Memory
     String.new @buffer, @bytesize
   end
 
-  # Returns a `Slice` over the internal buffer. Modifying the slice
-  # modifies the internal buffer.
+  # Returns the underlying bytes.
   #
   # ```
-  # io = IO::Memory.new "hello"
-  # slice = io.to_slice
-  # slice[0] = 97_u8
-  # io.gets_to_end # => "aello"
+  # io = IO::Memory.new
+  # io.print "hello"
+  #
+  # io.to_slice # => Bytes[104, 101, 108, 108, 111]
   # ```
-  def to_slice
-    Slice.new(@buffer, @bytesize)
+  def to_slice : Bytes
+    Slice.new(@buffer, @bytesize, read_only: !@writeable)
   end
 
   # Appends this internal buffer to the given `IO`.
   def to_s(io)
-    io.write Slice.new(@buffer, @bytesize)
+    io.write(to_slice)
   end
 
   private def check_writeable
     unless @writeable
-      raise IO::Error.new "read-only stream"
+      raise IO::Error.new "Read-only stream"
     end
   end
 
   private def check_resizeable
     unless @resizeable
-      raise IO::Error.new "non-resizeable stream"
+      raise IO::Error.new "Non-resizeable stream"
     end
   end
 

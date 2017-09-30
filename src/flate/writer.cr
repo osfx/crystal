@@ -3,7 +3,7 @@
 # Instances of this class wrap another IO object. When you write to this
 # instance, it compresses the data and writes it to the underlying IO.
 #
-# **Note**: unless created with a block, `close` must be invoked after all
+# NOTE: unless created with a block, `close` must be invoked after all
 # data has been written to a Flate::Writer instance.
 class Flate::Writer
   include IO
@@ -17,7 +17,7 @@ class Flate::Writer
                  strategy : Flate::Strategy = Flate::Strategy::DEFAULT,
                  @sync_close : Bool = false, @dict : Bytes? = nil)
     unless -1 <= level <= 9
-      raise ArgumentError.new("invalid Flate level: #{level} (must be in -1..9)")
+      raise ArgumentError.new("Invalid Flate level: #{level} (must be in -1..9)")
     end
 
     @buf = uninitialized UInt8[8192] # output buffer used by zlib
@@ -32,18 +32,18 @@ class Flate::Writer
     end
   end
 
-  # Creates an instance of Flate::Writer, yields it to the given block, and closes
-  # it at its end.
-  def self.new(output : IO, level : Int32 = Flate::DEFAULT_COMPRESSION,
-               strategy : Flate::Strategy = Flate::Strategy::DEFAULT,
-               sync_close : Bool = false, dict : Bytes? = nil)
-    writer = new(output, level: level, strategy: strategy, sync_close: sync_close, dict: dict)
+  # Creates a new writer for the given *io*, yields it to the given block,
+  # and closes it at its end.
+  def self.open(io : IO, level : Int32 = Flate::DEFAULT_COMPRESSION,
+                strategy : Flate::Strategy = Flate::Strategy::DEFAULT,
+                sync_close : Bool = false, dict : Bytes? = nil)
+    writer = new(io, level: level, strategy: strategy, sync_close: sync_close, dict: dict)
     yield writer ensure writer.close
   end
 
   # Always raises `IO::Error` because this is a write-only `IO`.
   def read(slice : Bytes)
-    raise "can't read from Flate::Writer"
+    raise "Can't read from Flate::Writer"
   end
 
   # See `IO#write`.

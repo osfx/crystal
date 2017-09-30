@@ -36,17 +36,28 @@ class IO::ARGF
     first_initialize unless @initialized
 
     if current_io = @current_io
-      current_io.peek
-    elsif !@read_from_stdin && !@argv.empty?
+      peek = current_io.peek
+      if peek && peek.empty? # EOF
+        peek_next
+      else
+        peek
+      end
+    else
+      peek_next
+    end
+  end
+
+  private def peek_next
+    if !@read_from_stdin && !@argv.empty?
       read_next_argv
-      peek
+      self.peek
     else
       nil
     end
   end
 
   def write(slice : Bytes)
-    raise IO::Error.new "can't write to ARGF"
+    raise IO::Error.new "Can't write to ARGF"
   end
 
   def path

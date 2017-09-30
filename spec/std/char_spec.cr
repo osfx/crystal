@@ -1,4 +1,5 @@
 require "spec"
+require "unicode"
 
 describe "Char" do
   describe "upcase" do
@@ -9,6 +10,12 @@ describe "Char" do
   describe "downcase" do
     it { 'A'.downcase.should eq('a') }
     it { '1'.downcase.should eq('1') }
+    it do
+      actual = [] of Char
+      'ß'.downcase(Unicode::CaseOptions::Fold) { |c| actual << c }
+      actual.should eq(['s', 's'])
+    end
+    it { 'Ń'.downcase(Unicode::CaseOptions::Fold).should eq('ń') }
   end
 
   describe "succ" do
@@ -137,14 +144,6 @@ describe "Char" do
     '\\'.ord.should eq(92)
   end
 
-  it "escapes with octal" do
-    '\0'.ord.should eq(0)
-    '\3'.ord.should eq(3)
-    '\23'.ord.should eq((2 * 8) + 3)
-    '\123'.ord.should eq((1 * 8 * 8) + (2 * 8) + 3)
-    '\033'.ord.should eq((3 * 8) + 3)
-  end
-
   it "escapes with unicode" do
     '\u{12}'.ord.should eq(1 * 16 + 2)
     '\u{A}'.ord.should eq(10)
@@ -212,13 +211,13 @@ describe "Char" do
   end
 
   it "to_i rejects unsupported base (1)" do
-    expect_raises ArgumentError, "invalid base 1" do
+    expect_raises ArgumentError, "Invalid base 1" do
       '0'.to_i(1)
     end
   end
 
   it "to_i rejects unsupported base (37)" do
-    expect_raises ArgumentError, "invalid base 37" do
+    expect_raises ArgumentError, "Invalid base 37" do
       '0'.to_i(37)
     end
   end

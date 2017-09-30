@@ -42,7 +42,7 @@ class Reference
     {% if @type.abstract? %}
       # This shouldn't happen, as the type is abstract,
       # but we need to avoid the allocate invocation below
-      raise "can't dup {{@type}}"
+      raise "Can't dup {{@type}}"
     {% else %}
       dup = self.class.allocate
       dup.as(Void*).copy_from(self.as(Void*), instance_sizeof(self))
@@ -50,9 +50,9 @@ class Reference
     {% end %}
   end
 
-  # Returns this reference's `object_id` as the hash value.
-  def hash
-    object_id
+  # See `Object#hash(hasher)`
+  def hash(hasher)
+    hasher.reference(self)
   end
 
   def inspect(io : IO) : Nil

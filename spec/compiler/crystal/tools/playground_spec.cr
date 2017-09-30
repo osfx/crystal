@@ -98,6 +98,10 @@ describe Playground::AgentInstrumentorTransformer do
     assert_agent %(a || b), %(_p.i(1) { a || b })
   end
 
+  it "instrument chained comparisons (#4663)" do
+    assert_agent %(1 <= 2 <= 3), %(_p.i(1) { 1 <= 2 <= 3 })
+  end
+
   it "instrument unary expressions" do
     assert_agent %(pointerof(x)), %(_p.i(1) { pointerof(x) })
   end
@@ -570,4 +574,15 @@ describe Playground::AgentInstrumentorTransformer do
     end
     CR
   end
+end
+
+private def assert_compile(source)
+  sources = Playground::Session.instrument_and_prelude("", "", 0, source, Logger.new(nil))
+  compiler = Compiler.new
+  compiler.no_codegen = true
+  result = compiler.compile sources, "fake-no-build"
+end
+
+describe Playground::Session do
+  it { assert_compile %(puts "1") }
 end

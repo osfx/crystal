@@ -10,21 +10,9 @@ describe "HTML" do
     end
 
     it "escapes dangerous characters from a string" do
-      str = HTML.escape("< & >")
+      str = HTML.escape("< & > ' \"")
 
-      str.should eq("&lt; &amp; &gt;")
-    end
-
-    it "escapes javascript example from a string" do
-      str = HTML.escape("<script>alert('You are being hacked')</script>")
-
-      str.should eq("&lt;script&gt;alert&#40;&#39;You are being hacked&#39;&#41;&lt;/script&gt;")
-    end
-
-    it "escapes nonbreakable space but not normal space" do
-      str = HTML.escape("nbsp space ")
-
-      str.should eq("nbsp&nbsp;space ")
+      str.should eq("&lt; &amp; &gt; &#39; &quot;")
     end
   end
 
@@ -48,7 +36,7 @@ describe "HTML" do
     end
 
     it "unescapes decimal encoded chars" do
-      str = HTML.unescape("&lt;&#104;&#101;llo world&gt;")
+      str = HTML.unescape("&lt;&#104;&#101llo world&gt;")
 
       str.should eq("<hello world>")
     end
@@ -56,11 +44,11 @@ describe "HTML" do
     it "unescapes with invalid entities" do
       str = HTML.unescape("&&lt;&amp&gt;&quot&abcdefghijklmn")
 
-      str.should eq("&<&amp>&quot&abcdefghijklmn")
+      str.should eq("&<&>\"&abcdefghijklmn")
     end
 
     it "unescapes hex encoded chars" do
-      str = HTML.unescape("3 &#x0002B; 2 &#x0003D; 5")
+      str = HTML.unescape("3 &#x0002B; 2 &#x0003D 5")
 
       str.should eq("3 + 2 = 5")
     end
@@ -68,7 +56,7 @@ describe "HTML" do
     it "unescapes &nbsp;" do
       str = HTML.unescape("nbsp&nbsp;space ")
 
-      str.should eq("nbsp space ")
+      str.should eq("nbsp\u{0000A0}space ")
     end
 
     it "unescapes Char::MAX_CODEPOINT" do
@@ -77,6 +65,17 @@ describe "HTML" do
 
       str = HTML.unescape("limit &#1114111;")
       str.should eq("limit 􏿿")
+    end
+
+    it "unescapes &NotSquareSuperset;" do
+      str = HTML.unescape(" &NotSquareSuperset; ")
+
+      str.should eq(" ⊐̸ ")
+    end
+
+    it "unescapes &ampd" do
+      str = HTML.unescape("&amphello")
+      str.should eq("&hello")
     end
   end
 end

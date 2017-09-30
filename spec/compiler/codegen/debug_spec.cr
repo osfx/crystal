@@ -78,4 +78,54 @@ describe "Code gen: debug" do
       Foo.new
       ), debug: Crystal::Debug::All)
   end
+
+  it "correctly restores debug location after fun change (#4254)" do
+    codegen(%(
+      require "prelude"
+
+      class Foo
+        def self.one
+          TWO.two { three }
+          self
+        end
+
+        def self.three
+          1 + 2
+        end
+
+        def two(&block)
+          block
+        end
+      end
+
+      ONE = Foo.one
+      TWO = Foo.new
+
+      ONE.three
+      ), debug: Crystal::Debug::All)
+  end
+
+  it "has correct debug location after constant initialization in call with block (#4719)" do
+    codegen(%(
+      fun __crystal_malloc_atomic(size : UInt32) : Void*
+        x = uninitialized Void*
+        x
+      end
+
+      class Foo
+      end
+
+      class Bar
+        def initialize
+          yield
+        end
+      end
+
+      A = Foo.new
+
+      Bar.new { }
+
+      A
+      ), debug: Crystal::Debug::All)
+  end
 end

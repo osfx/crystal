@@ -75,24 +75,28 @@ class Crystal::Program
       generated_node = yield parser
       normalize(generated_node, inside_exp: inside_exp)
     rescue ex : Crystal::SyntaxException
-      node.raise "macro didn't expand to a valid program, it expanded to:\n\n#{"=" * 80}\n#{"-" * 80}\n#{Crystal.with_line_numbers(generated_source)}\n#{"-" * 80}\n#{ex.to_s_with_source(generated_source)}\n#{"=" * 80}"
+      expanded_source = String.build do |str|
+        str << ("=" * 80) << '\n'
+        str << ("-" * 80) << '\n'
+        str << Crystal.with_line_numbers(generated_source) << '\n'
+        str << ("-" * 80) << '\n'
+        str << ex.to_s_with_source(generated_source) << '\n'
+        str << ("=" * 80)
+      end
+      node.raise "macro didn't expand to a valid program, it expanded to:\n\n#{expanded_source}"
     end
   end
+
+  record MacroRunResult, stdout : String, stderr : String, status : Process::Status
 
   def macro_run(filename, args)
     compiled_macro_run = @compiled_macros_cache[filename] ||= macro_compile(filename)
     compiled_file = compiled_macro_run.filename
 
-    command = String.build do |str|
-      str << compiled_file.inspect
-      args.each do |arg|
-        str << " "
-        str << arg.inspect
-      end
-    end
-
-    result = `#{command}`
-    {$?.success?, result}
+    out_io = IO::Memory.new
+    err_io = IO::Memory.new
+    Process.run(compiled_file, args: args, shell: true, output: out_io, error: err_io)
+    MacroRunResult.new(out_io.to_s, err_io.to_s, $?)
   end
 
   record RequireWithTimestamp, filename : String, epoch : Int64 do
@@ -100,7 +104,7 @@ class Crystal::Program
   end
 
   def macro_compile(filename)
-    time = wants_stats? ? Time.now : Time.epoch(0)
+    time = Time.now
 
     source = File.read(filename)
 
@@ -108,7 +112,7 @@ class Crystal::Program
     # that way if it's already there from a previous compilation, and no file
     # that this program uses changes, we can simply avoid recompiling it again
     #
-    # Note: it could happen that a macro run program runs macros that could
+    # NOTE: it could happen that a macro run program runs macros that could
     # change the program behaviour even if files don't change, but this is
     # discouraged (and we should strongly document it) because it prevents
     # incremental compiles.
@@ -123,7 +127,7 @@ class Crystal::Program
     File.utime(now, now, program_dir)
 
     if can_reuse_previous_compilation?(filename, executable_path, recorded_requires_path, requires_path)
-      elapsed_time = wants_stats? ? (Time.now - time) : Time::Span.zero
+      elapsed_time = Time.now - time
       return CompiledMacroRun.new(executable_path, elapsed_time, true)
     end
 
@@ -162,8 +166,7 @@ class Crystal::Program
       requires_with_timestamps.to_json(file)
     end
 
-    elapsed_time = wants_stats? ? (Time.now - time) : Time::Span.zero
-
+    elapsed_time = Time.now - time
     CompiledMacroRun.new(executable_path, elapsed_time, false)
   end
 
@@ -192,7 +195,7 @@ class Crystal::Program
     recorded_requires.map do |recorded_require|
       begin
         files = @program.find_in_path(recorded_require.filename, recorded_require.relative_to)
-        required_files.merge!(files) if files
+        required_files.concat(files) if files
       rescue Crystal::CrystalPath::Error
         # Maybe the file is gone
         next

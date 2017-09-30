@@ -1,3 +1,6 @@
+require "./typed_def_processor"
+require "./implementations"
+
 module Crystal
   struct ExpandResult
     JSON.mapping({
@@ -16,7 +19,14 @@ module Crystal
         io << "   "
         io.puts expansion.original_source.lines(chomp: false).join "   "
         io.puts
-        expansion.expanded_sources.each_with_index do |expanded_source, j|
+        expansion.expanded_sources.zip(expansion.expanded_macros)
+                                  .each_with_index do |(expanded_source, expanded_macro), j|
+          expanded_macro.each do |a_macro|
+            name = a_macro[:name]
+            impl = a_macro[:implementation]
+            io.puts "# expand macro '#{name}' (#{impl.filename}:#{impl.line}:#{impl.column})"
+            # TODO: When `impl.expands` is not `nil`, how shows this?
+          end
           io << "~> "
           io.puts expanded_source.lines(chomp: false).join "   "
           io.puts
@@ -25,27 +35,48 @@ module Crystal
     end
 
     struct Expansion
+      alias MacroImplementation = {name: String, implementation: ImplementationTrace}
+
       JSON.mapping({
         original_source:  {type: String},
         expanded_sources: {type: Array(String)},
+        expanded_macros:  {type: Array(Array(MacroImplementation))},
       })
 
-      def initialize(@original_source, @expanded_sources)
+      def initialize(@original_source, @expanded_sources, @expanded_macros)
       end
 
       def self.build(original_node)
+        original_source = ast_to_s original_node
+
         transformer = ExpandTransformer.new
         expanded_node = transformer.transform original_node
 
         expanded_sources = [] of String
+        expanded_macros = [] of Array(MacroImplementation)
 
         while transformer.expanded?
           expanded_sources << ast_to_s expanded_node
+          expanded_macros << transformer.macro_calls
+                                        .compact_map do |call|
+            if (a_macro = call.expanded_macro) && (location = a_macro.location)
+              name = a_macro.name
+              # Fix name like `mapping` to `JSON.mapping`
+              name = "#{call.obj}.#{name}" if call.obj.is_a?(Path)
+
+              implementation = ImplementationTrace.build location
+              MacroImplementation.new(
+                name: name,
+                implementation: implementation)
+            end
+          end
+
           transformer.expanded = false
+          transformer.macro_calls.clear
           expanded_node = transformer.transform expanded_node
         end
 
-        Expansion.new ast_to_s(original_node), expanded_sources
+        Expansion.new original_source, expanded_sources, expanded_macros
       end
 
       private def self.ast_to_s(node)
@@ -70,38 +101,17 @@ module Crystal
   end
 
   class ExpandVisitor < Visitor
+    include TypedDefProcessor
+
     def initialize(@target_location : Location)
       @found_nodes = [] of ASTNode
       @in_defs = false
       @message = "no expansion found"
     end
 
-    def process_type(type)
-      return unless type
-
-      if type.is_a?(NamedType) || type.is_a?(Program) || type.is_a?(FileModule)
-        type.types?.try &.each_value do |inner_type|
-          process_type(inner_type)
-        end
-      end
-
-      process_type type.metaclass if type.metaclass != type
-
-      if type.is_a?(DefInstanceContainer)
-        type.def_instances.each_value &.accept(self)
-      end
-
-      if type.is_a?(GenericType)
-        type.generic_types.values.each do |instanced_type|
-          process_type(instanced_type)
-        end
-      end
-    end
-
     def process(result : Compiler::Result)
       @in_defs = true
-      process_type result.program
-      process_type result.program.file_module?(@target_location.original_filename)
+      process_result result
       @in_defs = false
 
       result.node.accept(self)
@@ -170,8 +180,19 @@ module Crystal
 
   class ExpandTransformer < Transformer
     property? expanded = false
+    getter macro_calls = [] of Call
 
-    def transform(node : Call | MacroFor | MacroIf | MacroExpression)
+    def transform(node : Call)
+      if expanded = node.expanded
+        self.expanded = true
+        macro_calls << node
+        expanded
+      else
+        super
+      end
+    end
+
+    def transform(node : MacroFor | MacroIf | MacroExpression)
       if expanded = node.expanded
         self.expanded = true
         expanded

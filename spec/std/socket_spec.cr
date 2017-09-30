@@ -274,7 +274,7 @@ describe UNIXServer do
       end
 
       exception.should be_a(IO::Error)
-      exception.try(&.message).should eq("closed stream")
+      exception.try(&.message).should eq("Closed stream")
     end
   end
 
@@ -379,11 +379,11 @@ describe UNIXSocket do
       right.read_timeout = 0.0001
       buf = ("a" * 4096).to_slice
 
-      expect_raises(IO::Timeout, "write timed out") do
+      expect_raises(IO::Timeout, "Write timed out") do
         loop { left.write buf }
       end
 
-      expect_raises(IO::Timeout, "read timed out") do
+      expect_raises(IO::Timeout, "Read timed out") do
         loop { right.read buf }
       end
     end
@@ -424,9 +424,17 @@ describe TCPServer do
     end
   end
 
-  it "allows to share the same port (SO_REUSEPORT)" do
+  it "doesn't reuse the TCP port by default (SO_REUSEPORT)" do
     TCPServer.open("::", 0) do |server|
-      TCPServer.open("::", server.local_address.port) { }
+      expect_raises(Errno) do
+        TCPServer.open("::", server.local_address.port) { }
+      end
+    end
+  end
+
+  it "reuses the TCP port (SO_REUSEPORT)" do
+    TCPServer.open("::", 0, reuse_port: true) do |server|
+      TCPServer.open("::", server.local_address.port, reuse_port: true) { }
     end
   end
 end
@@ -530,8 +538,14 @@ describe TCPSocket do
   end
 
   it "fails when host doesn't exist" do
-    expect_raises(Socket::Error, /No address found for localhostttttt:12345/) do
-      TCPSocket.new("localhostttttt", 12345)
+    expect_raises(Socket::Error, /No address/i) do
+      TCPSocket.new("doesnotexist.example.org.", 12345)
+    end
+  end
+
+  it "fails (rather than segfault on darwin) when host doesn't exist and port is 0" do
+    expect_raises(Socket::Error, /No address/i) do
+      TCPSocket.new("doesnotexist.example.org.", 0)
     end
   end
 end

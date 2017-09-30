@@ -19,6 +19,7 @@ class JSON::PullParser
     @raw_value = ""
     @object_stack = [] of Symbol
     @skip_count = 0
+    @location = {0, 0}
 
     next_token
     case token.type
@@ -233,7 +234,7 @@ class JSON::PullParser
     end
 
     unless found
-      raise "json key not found: #{key}"
+      raise "JSON key not found: #{key}"
     end
 
     value
@@ -396,6 +397,18 @@ class JSON::PullParser
     @lexer.skip = false
   end
 
+  def line_number
+    @location[0]
+  end
+
+  def column_number
+    @location[1]
+  end
+
+  def location
+    @location
+  end
+
   private def skip_internal
     @skip_count += 1
     case @kind
@@ -450,9 +463,19 @@ class JSON::PullParser
     @object_stack.last?
   end
 
-  private delegate token, to: @lexer
-  private delegate next_token, to: @lexer
-  private delegate next_token_expect_object_key, to: @lexer
+  private def token
+    @lexer.token
+  end
+
+  private def next_token
+    @location = {@lexer.token.line_number, @lexer.token.column_number}
+    @lexer.next_token
+  end
+
+  private def next_token_expect_object_key
+    @location = {@lexer.token.line_number, @lexer.token.column_number}
+    @lexer.next_token_expect_object_key
+  end
 
   private def next_token_after_value
     case next_token.type
@@ -484,11 +507,11 @@ class JSON::PullParser
   end
 
   private def expect_kind(kind)
-    parse_exception "expected #{kind} but was #{@kind}" unless @kind == kind
+    parse_exception "Expected #{kind} but was #{@kind}" unless @kind == kind
   end
 
   private def unexpected_token
-    parse_exception "unexpected token: #{token}"
+    parse_exception "Unexpected token: #{token}"
   end
 
   private def parse_exception(msg)
@@ -497,7 +520,7 @@ class JSON::PullParser
 
   private def push_in_object_stack(symbol)
     if @object_stack.size >= @max_nesting
-      parse_exception "nesting of #{@object_stack.size + 1} is too deep"
+      parse_exception "Nesting of #{@object_stack.size + 1} is too deep"
     end
 
     @object_stack.push(symbol)

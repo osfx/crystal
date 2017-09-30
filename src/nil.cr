@@ -67,9 +67,9 @@ struct Nil
     false
   end
 
-  # Returns `0`.
-  def hash
-    0
+  # See `Object#hash(hasher)`
+  def hash(hasher)
+    hasher.nil
   end
 
   # Returns an empty string.
@@ -92,7 +92,7 @@ struct Nil
     io << "nil"
   end
 
-  # Doesn't yields to the block.
+  # Doesn't yield to the block.
   #
   # See also: `Object#try`.
   def try(&block)

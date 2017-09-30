@@ -342,7 +342,7 @@ module Crystal
           @str << "."
         end
         if node.name.ends_with?('=') && node.name[0].ascii_letter?
-          @str << decorate_call(node, node.name.chop)
+          @str << decorate_call(node, node.name.rchop)
           @str << " = "
           node.args.each_with_index do |arg, i|
             @str << ", " if i > 0
@@ -425,7 +425,7 @@ module Crystal
           !letter_or_underscore?(obj.name)
         else
           case obj.name
-          when "[]", "[]?"
+          when "[]", "[]?", "<", "<=", ">", ">="
             false
           else
             true
@@ -618,7 +618,6 @@ module Crystal
 
     def visit(node : Def)
       @str << "abstract " if node.abstract?
-      @str << "macro " if node.macro_def?
       @str << keyword("def")
       @str << " "
       if node_receiver = node.receiver
@@ -1247,9 +1246,7 @@ module Crystal
 
     def visit_cast(node, keyword)
       need_parens = need_parens(node.obj)
-      @str << "(" if need_parens
-      accept_with_maybe_begin_end node.obj
-      @str << ")" if need_parens
+      in_parenthesis(need_parens, node.obj)
       @str << "."
       @str << keyword(keyword)
       @str << "("
@@ -1414,8 +1411,8 @@ module Crystal
           printed_arg = true
         end
         if named_args = node.named_args
-          @str << ", " if printed_arg
           named_args.each do |named_arg|
+            @str << ", " if printed_arg
             visit_named_arg_name(named_arg.name)
             @str << ": "
             named_arg.value.accept self
@@ -1522,7 +1519,8 @@ module Crystal
     end
 
     def accept_with_maybe_begin_end(node)
-      if node.is_a?(Expressions)
+      case node
+      when Expressions
         if node.expressions.size == 1
           @str << "("
           node.expressions.first.accept self
@@ -1534,6 +1532,12 @@ module Crystal
           append_indent
           @str << keyword("end")
         end
+      when If, Unless, While, Until
+        @str << keyword("begin")
+        newline
+        accept_with_indent(node)
+        append_indent
+        @str << keyword("end")
       else
         node.accept self
       end

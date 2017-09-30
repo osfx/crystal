@@ -133,7 +133,7 @@ describe "IO::Buffered" do
 
   it "raises if invoking gets with negative limit" do
     io = BufferedWrapper.new(IO::Memory.new("hello\nworld\n"))
-    expect_raises ArgumentError, "negative limit" do
+    expect_raises ArgumentError, "Negative limit" do
       io.gets(-1)
     end
   end
@@ -315,8 +315,8 @@ describe "IO::Buffered" do
     # Peek doesn't advance
     io.gets_to_end.should eq("foo")
 
-    # Returns nil if no more data
-    io.peek.should be_nil
+    # Returns EOF if no more data
+    io.peek.should eq(Bytes.empty)
   end
 
   it "skips" do

@@ -23,9 +23,11 @@ class HTTP::WebSocket
   # HTTP::WebSocket.new(URI.parse("ws://websocket.example.com/chat"))        # Creates a new WebSocket to `websocket.example.com`
   # HTTP::WebSocket.new(URI.parse("wss://websocket.example.com/chat"))       # Creates a new WebSocket with TLS to `websocket.example.com`
   # HTTP::WebSocket.new(URI.parse("http://websocket.example.com:8080/chat")) # Creates a new WebSocket to `websocket.example.com` on port `8080`
+  # HTTP::WebSocket.new(URI.parse("ws://websocket.example.com/chat"),        # Creates a new WebSocket to `websocket.example.com` with an Authorization header
+  #   HTTP::Headers{"Authorization" => "Bearer authtoken"})
   # ```
-  def self.new(uri : URI | String)
-    new(Protocol.new(uri))
+  def self.new(uri : URI | String, headers = HTTP::Headers.new)
+    new(Protocol.new(uri, headers: headers))
   end
 
   # Opens a new websocket to the target host. This will also handle the handshake
@@ -35,8 +37,8 @@ class HTTP::WebSocket
   # HTTP::WebSocket.new("websocket.example.com", "/chat")            # Creates a new WebSocket to `websocket.example.com`
   # HTTP::WebSocket.new("websocket.example.com", "/chat", tls: true) # Creates a new WebSocket with TLS to `ẁebsocket.example.com`
   # ```
-  def self.new(host : String, path : String, port = nil, tls = false)
-    new(Protocol.new(host, path, port, tls))
+  def self.new(host : String, path : String, port = nil, tls = false, headers = HTTP::Headers.new)
+    new(Protocol.new(host, path, port, tls, headers))
   end
 
   def on_ping(&@on_ping : String ->)
@@ -48,11 +50,14 @@ class HTTP::WebSocket
   def on_message(&@on_message : String ->)
   end
 
+  def on_binary(&@on_binary : Bytes ->)
+  end
+
   def on_close(&@on_close : String ->)
   end
 
   protected def check_open
-    raise IO::Error.new "closed socket" if closed?
+    raise IO::Error.new "Closed socket" if closed?
   end
 
   def send(message)
@@ -119,6 +124,12 @@ class HTTP::WebSocket
         @current_message.write @buffer[0, info.size]
         if info.final
           @on_message.try &.call(@current_message.to_s)
+          @current_message.clear
+        end
+      when Protocol::Opcode::BINARY
+        @current_message.write @buffer[0, info.size]
+        if info.final
+          @on_binary.try &.call(@current_message.to_slice)
           @current_message.clear
         end
       when Protocol::Opcode::CLOSE

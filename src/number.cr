@@ -44,8 +44,8 @@ struct Number
   # ints = Int64.slice(1, 2, 3)
   # ints.class # => Slice(Int64)
   # ```
-  macro slice(*nums)
-    %slice = Slice({{@type}}).new({{nums.size}})
+  macro slice(*nums, read_only = false)
+    %slice = Slice({{@type}}).new({{nums.size}}, read_only: {{read_only}})
     {% for num, i in nums %}
       %slice.to_unsafe[{{i}}] = {{@type}}.new({{num}})
     {% end %}
@@ -211,8 +211,13 @@ struct Number
   # ```
   def round(digits, base = 10)
     x = self.to_f
-    y = base ** digits
-    self.class.new((x * y).round / y)
+    if digits < 0
+      y = base ** (-digits)
+      self.class.new((x / y).round * y)
+    else
+      y = base ** digits
+      self.class.new((x * y).round / y)
+    end
   end
 
   # Clamps a value within *range*.
@@ -223,7 +228,7 @@ struct Number
   # 500.clamp(10..100) # => 100
   # ```
   def clamp(range : Range)
-    raise ArgumentError.new("can't clamp an exclusive range") if range.exclusive?
+    raise ArgumentError.new("Can't clamp an exclusive range") if range.exclusive?
     clamp range.begin, range.end
   end
 
@@ -238,6 +243,16 @@ struct Number
     return max if self > max
     return min if self < min
     self
+  end
+
+  # Returns `true` if value is equal to zero.
+  #
+  # ```
+  # 0.zero? # => true
+  # 5.zero? # => false
+  # ```
+  def zero? : Bool
+    self == 0
   end
 
   private class StepIterator(T, L, B)

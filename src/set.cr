@@ -16,7 +16,7 @@
 # s1 == s2 # => true
 # s1 == s3 # => true
 # s1.add(2)
-# s1.merge!([6, 8])
+# s1.concat([6, 8])
 # s1.subset? s2 # => false
 # s2.subset? s1 # => true
 # ```
@@ -37,6 +37,11 @@ struct Set(T)
     @hash = Hash(T, Nil).new(initial_capacity: initial_capacity)
   end
 
+  # Optimized version of `new` used when *other* is also an `Indexable`
+  def self.new(other : Indexable(T))
+    Set(T).new(other.size).concat(other)
+  end
+
   # Creates a new set from the elements in *enumerable*.
   #
   # ```
@@ -45,7 +50,7 @@ struct Set(T)
   # s.empty? # => false
   # ```
   def self.new(enumerable : Enumerable(T))
-    Set(T).new.merge!(enumerable)
+    Set(T).new.concat(enumerable)
   end
 
   # Alias for `add`
@@ -70,12 +75,12 @@ struct Set(T)
   #
   # ```
   # s = Set{1, 5}
-  # s.merge! [5, 5, 8, 9]
+  # s.concat [5, 5, 8, 9]
   # s.size # => 4
   # ```
   #
   # See also: `#|` to merge two sets and return a new one.
-  def merge!(elems)
+  def concat(elems)
     elems.each { |elem| self << elem }
     self
   end
@@ -158,9 +163,14 @@ struct Set(T)
   # Set{'a', 'b', 'b', 'z'} & Set{'a', 'b', 'c'} # => Set{'a', 'b'}
   # ```
   def &(other : Set)
+    smallest, largest = self, other
+    if largest.size < smallest.size
+      smallest, largest = largest, smallest
+    end
+
     set = Set(T).new
-    each do |value|
-      set.add value if other.includes?(value)
+    smallest.each do |value|
+      set.add value if largest.includes?(value)
     end
     set
   end
@@ -172,9 +182,9 @@ struct Set(T)
   # Set{'a', 'b', 'b', 'z'} | Set{'a', 'b', 'c'} # => Set{'a', 'b', 'z', 'c'}
   # ```
   #
-  # See also: `#merge` to add elements from a set to `self`.
+  # See also: `#concat` to add elements from a set to `self`.
   def |(other : Set(U)) forall U
-    set = Set(T | U).new
+    set = Set(T | U).new(Math.max(size, other.size))
     each { |value| set.add value }
     other.each { |value| set.add value }
     set
@@ -273,7 +283,7 @@ struct Set(T)
 
   # Returns a new `Set` with all of the elements cloned.
   def clone
-    clone = Set(T).new
+    clone = Set(T).new(self.size)
     each do |element|
       clone << element.clone
     end
@@ -298,9 +308,8 @@ struct Set(T)
     pp.list("Set{", self, "}")
   end
 
-  def hash
-    @hash.hash
-  end
+  # See `Object#hash(hasher)`
+  def_hash @hash
 
   # Returns `true` if the set and the given set have at least one element in
   # common.

@@ -275,6 +275,21 @@ describe XML do
     doc.version.should eq("1.0")
   end
 
+  it "unlinks nodes" do
+    xml = <<-XML
+        <person id="1">
+          <firstname>Jane</firstname>
+          <lastname>Doe</lastname>
+        </person>
+        XML
+    document = XML.parse(xml)
+
+    node = document.xpath_node("//lastname").not_nil!
+    node.unlink
+
+    document.xpath_node("//lastname").should eq(nil)
+  end
+
   it "does to_s with correct encoding (#2319)" do
     xml_str = <<-XML
     <?xml version='1.0' encoding='UTF-8'?>
@@ -287,17 +302,24 @@ describe XML do
     doc.root.to_s.should eq("<person>\n  <name>たろう</name>\n</person>")
   end
 
-  describe "escape" do
-    it "does not change a safe string" do
-      str = XML.escape("safe_string")
+  it "sets an attribute" do
+    doc = XML.parse(%{<foo />})
+    root = doc.root.not_nil!
 
-      str.should eq("safe_string")
-    end
+    root["bar"] = "baz"
+    root["bar"].should eq("baz")
+    root.to_s.should eq(%{<foo bar="baz"/>})
+  end
 
-    it "escapes dangerous characters from a string" do
-      str = XML.escape("< & >")
+  it "changes an attribute" do
+    doc = XML.parse(%{<foo bar="baz"></foo>})
+    root = doc.root.not_nil!
 
-      str.should eq("&lt; &amp; &gt;")
-    end
+    root["bar"] = "baz"
+    root["bar"].should eq("baz")
+    root.to_s.should eq(%{<foo bar="baz"/>})
+
+    root["bar"] = 1
+    root["bar"].should eq("1")
   end
 end

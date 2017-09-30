@@ -174,6 +174,18 @@ module HTTP
     it "handles malformed request" do
       request = Request.from_io(IO::Memory.new("nonsense"))
       request.should be_a(Request::BadRequest)
+      request = Request.from_io(IO::Memory.new("GET / HTTP/1.1\r\nX-Test-Header: \u{0}\r\n"))
+      request.should be_a(Request::BadRequest)
+    end
+
+    it "handles long request lines" do
+      request = Request.from_io(IO::Memory.new("GET /#{"a" * 4096} HTTP/1.1\r\n\r\n"))
+      request.should be_a(Request::BadRequest)
+    end
+
+    it "handles long headers" do
+      request = Request.from_io(IO::Memory.new("GET / HTTP/1.1\r\n#{"X-Test-Header: A pretty log header value\r\n" * 1000}\r\n"))
+      request.should be_a(Request::BadRequest)
     end
 
     describe "keep-alive" do

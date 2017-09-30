@@ -131,13 +131,19 @@ module Iterator(T)
   end
 
   def self.of(&block : -> T)
-    SingletonProc(T).new(block)
+    SingletonProc(typeof(without_stop(&block))).new(block)
+  end
+
+  private def self.without_stop(&block : -> T)
+    e = block.call
+    raise "" if e.is_a?(Iterator::Stop)
+    e
   end
 
   private struct SingletonProc(T)
     include Iterator(T)
 
-    def initialize(@proc : -> T)
+    def initialize(@proc : (-> (T | Iterator::Stop)) | (-> T))
     end
 
     def next
@@ -243,7 +249,7 @@ module Iterator(T)
   # This can be used to prevent many memory allocations when each slice of
   # interest is to be used in a read-only fashion.
   def cons(n : Int, reuse = false)
-    raise ArgumentError.new "invalid cons size: #{n}" if n <= 0
+    raise ArgumentError.new "Invalid cons size: #{n}" if n <= 0
     Cons(typeof(self), T, typeof(n)).new(self, n, reuse)
   end
 
@@ -596,7 +602,7 @@ module Iterator(T)
   # This can be used to prevent many memory allocations when each slice of
   # interest is to be used in a read-only fashion.
   def in_groups_of(size : Int, filled_up_with = nil, reuse = false)
-    raise ArgumentError.new("size must be positive") if size <= 0
+    raise ArgumentError.new("Size must be positive") if size <= 0
     InGroupsOf(typeof(self), T, typeof(size), typeof(filled_up_with)).new(self, size, filled_up_with, reuse)
   end
 
@@ -800,7 +806,7 @@ module Iterator(T)
 
   # Alias of `each_slice`.
   def slice(n : Int, reuse = false)
-    raise ArgumentError.new "invalid slice size: #{n}" if n <= 0
+    raise ArgumentError.new "Invalid slice size: #{n}" if n <= 0
     Slice(typeof(self), T, typeof(n)).new(self, n, reuse)
   end
 
@@ -1154,11 +1160,9 @@ module Iterator(T)
   # For example, consecutive even numbers and odd numbers can be chunked as follows.
   #
   # ```
-  # [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5].chunk { |n|
-  #   n.even?
-  # }.each { |even, ary|
+  # [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5].chunk(&.even?).each do |even, ary|
   #   p [even, ary]
-  # }
+  # end
   #
   # # => [false, [3, 1]]
   # #    [true, [4]]

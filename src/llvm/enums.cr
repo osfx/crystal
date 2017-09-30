@@ -2,7 +2,6 @@ module LLVM
   {% if LibLLVM.has_constant?(:AttributeRef) %}
     @[Flags]
     enum Attribute : UInt64
-      None = 0
       Alignment = 1 << 0
       AllocSize = 1 << 1
       AlwaysInline = 1 << 2
@@ -371,5 +370,43 @@ module LLVM
     BitField            = 1 << 19
     NoReturn            = 1 << 20
     MainSubprogram      = 1 << 21
+  end
+
+  struct Value
+    enum Kind
+      Argument
+      BasicBlock
+      MemoryUse
+      MemoryDef
+      MemoryPhi
+
+      Function
+      GlobalAlias
+      GlobalIFunc
+      GlobalVariable
+      BlockAddress
+      ConstantExpr
+      ConstantArray
+      ConstantStruct
+      ConstantVector
+
+      UndefValue
+      ConstantAggregateZero
+      ConstantDataArray
+      ConstantDataVector
+      ConstantInt
+      ConstantFP
+      ConstantPointerNull
+      ConstantTokenNone
+
+      MetadataAsValue
+      InlineAsm
+
+      Instruction
+    end
+  end
+
+  enum ModuleFlag : Int32
+    Warning = 2
   end
 end

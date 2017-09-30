@@ -2,11 +2,7 @@ require "../../spec_helper"
 
 class Crystal::Program
   def t(type)
-    if type.ends_with?('+')
-      types[type.chop].virtual_type
-    else
-      types[type]
-    end
+    types[type.rchop('+')].virtual_type
   end
 end
 
@@ -81,7 +77,8 @@ describe "Restrictions" do
   it "self always matches instance type in return type" do
     assert_type(%(
       class Foo
-        macro def self.foo : self
+        def self.foo : self
+          {{ @type }}
           Foo.new
         end
       end

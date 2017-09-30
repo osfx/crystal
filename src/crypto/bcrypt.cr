@@ -1,4 +1,4 @@
-require "secure_random"
+require "random/secure"
 require "./subtle"
 
 # Pure Crystal implementation of the Bcrypt algorithm by Niels Provos and David
@@ -35,7 +35,7 @@ class Crypto::Bcrypt
   SALT_SIZE      = 16
 
   private BLOWFISH_ROUNDS = 16
-  private DIGEST_SIZE = 31
+  private DIGEST_SIZE     = 31
 
   # bcrypt IV: "OrpheanBeholderScryDoubt"
   private CIPHER_TEXT = UInt32.static_array(
@@ -44,13 +44,15 @@ class Crypto::Bcrypt
   )
 
   def self.hash_secret(password, cost = DEFAULT_COST) : String
-    passwordb = password.to_unsafe.to_slice(password.bytesize + 1) # include leading 0
-    saltb = SecureRandom.random_bytes(SALT_SIZE)
+    # We make a clone here to we don't keep a mutable reference to the original string
+    passwordb = password.to_unsafe.to_slice(password.bytesize + 1).clone # include leading 0
+    saltb = Random::Secure.random_bytes(SALT_SIZE)
     new(passwordb, saltb, cost).to_s
   end
 
   def self.new(password : String, salt : String, cost = DEFAULT_COST)
-    passwordb = password.to_unsafe.to_slice(password.bytesize + 1) # include leading 0
+    # We make a clone here to we don't keep a mutable reference to the original string
+    passwordb = password.to_unsafe.to_slice(password.bytesize + 1).clone # include leading 0
     saltb = Base64.decode(salt, SALT_SIZE)
     new(passwordb, saltb, cost)
   end

@@ -3,7 +3,7 @@
 # Instances of this class wrap another IO object. When you write to this
 # instance, it compresses the data and writes it to the underlying IO.
 #
-# **Note**: unless created with a block, `close` must be invoked after all
+# NOTE: unless created with a block, `close` must be invoked after all
 # data has been written to a Zlib::Writer instance.
 class Zlib::Writer
   include IO
@@ -42,7 +42,7 @@ class Zlib::Writer
 
   # Always raises `IO::Error` because this is a write-only `IO`.
   def read(slice : Bytes)
-    raise IO::Error.new("can't read from Gzip::Writer")
+    raise IO::Error.new("Can't read from Gzip::Writer")
   end
 
   # See `IO#write`.

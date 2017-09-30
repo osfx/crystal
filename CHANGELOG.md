@@ -1,3 +1,147 @@
+# 0.23.1 (01-07-2017)
+
+* Added `Random::PCG32` generator (See #4536, thanks @konovod)
+* WebSocket should compare "Upgrade" header value with case insensitive (See #4617, thanks @MakeNowJust)
+* Fixed macro lookup from included module (See #4639, thanks @asterite)
+* Explained "crystal tool expand" in crystal(1) man page (See #4643, thanks @MakeNowJust)
+* Explained how to detect end of file in `IO` (See #4661, thanks @oprypin)
+
+# 0.23.0 (27-06-2017)
+
+* **(breaking-change)** `Logger#formatter` takes a `Severity` instead of a `String` (See #4355, #4369, thanks @Sija)
+* **(breaking-change)** Removed `IO.select` (See #4392, thanks @RX14)
+* Added `Crystal::System::Random` namespace (See #4450, thanks @ysbaddaden)
+* Added `Path#resolve?` macro method (See #4370, #4408, thanks @RX14)
+* Added range methods to `BitArray` (See #4397, #3968, thanks @RX14)
+* Added some well-known HTTP Status messages (See #4419, thanks @akzhan)
+* Added compiler progress indicator (See #4182, thanks @RX14)
+* Added `System.cpu_cores` (See #4449, #4226, thanks @miketheman)
+* Added `separator` and `quote_char` to `CSV#each_row` (See #4448, thanks @timsu)
+* Added `map_with_index!` to `Pointer`, `Array` and `StaticArray` (See #4456, #3356, #3354, thanks @Nephos)
+* Added `headers` parameter to `HTTP::WebSocket` constructors (See #4227, #4222, thanks @adamtrilling)
+* Added `unlink` to `XML::Node` (See #4515, #4331, thanks @RX14 and @MrSorcus)
+* Added `Math.frexp` (See #4560, thanks @akzhan)
+* Added `Regex::MatchData` support for negative indexes (See #4566, thanks @MakeNowJust)
+* Added `captures`, `named_captures`, `to_a` and `to_h` to `Regex::MatchData` (See #3783, thanks @MakeNowJust)
+* Added `|` as a string delimiter to allow `q|string|` syntax (See #3467, thanks @RX14) 
+* Added support for Windows linker (See #4491, thanks @RX14)
+* Added llvm operand bundle def and catch pad/ret/switch in order to support Windows SEH (See #4501, thanks @bcardiff)
+* Added `Float::Printer` based on Grisu3 to speed up float to string convertion (See #4333, thanks @will)
+* Added `Object.unsafe_as` to unsafely reinterpret the bytes of an object as being of another `type` (See #4333, thanks @asterite)
+* Added `.downcase(Unicode::CaseOptions::Fold)` option which convert strings to casefolded strings for caseless matching (See #4512, thanks @akzhan)
+* Added `OpenSSL::DigestIO` to wrap an IO while calculating a digest (See #4260, thanks @spalladino)
+* Added `zero?` to numbers and time spans (See #4026, thanks @jellymann) 
+* Added `TypeNode#has_method?` method (See #4474, thanks @Sija)
+* `Regex::MatchData#size` renamed to `#group_size` (See #4565, thanks @MakeNowJust)
+* `HTTP::StaticFileHandler` can disable directory listing (See #4403, #4398, thanks @joaodiogocosta)
+* `bin/crystal` now uses `/bin/sh` instead of `/bin/bash` (See #3809, #4410, thanks @TheLonelyGhost)
+* `crystal init` generates a `.editorconfig` file (See #4422, #297, thanks @akzhan)
+* `man` page for `crystal` command (See #2989, #1291, thanks @dread-uo)
+* Re-raising an exception doesn't overwrite its callstack (See #4487, #4482, thanks @akzhan)
+* MD5 and SHA1 documentation clearly states they are not cryptographically secure anymore (See #4426, thanks @RX14)
+* Documentation about constructor methods now rendered separately (See #4216, thanks @Sija)
+* Turn `Random::System` into a module (See #4542, thanks @oprypin)
+* `Regex::MatchData` pretty printed (See #4574, thanks @MakeNowJust)
+* `String.underscore` treats digits as downcase or upcase characters depending previous characters (See #4280, thanks @MakeNowJust)
+* Refactor time platform specific implementation (See #4502, thanks @bcardiff)
+* Fixed Crystal not reusing .o files across builds (See #4336)
+* Fixed `SomeClass.class.is_a?(SomeConst)` causing an "already had enclosing call" exception (See #4364, #4390, thanks @rockwyc992)
+* Fixed `HTTP::Params.parse` query string with two `=` gave wrong result (See #4388, #4389, thanks @akiicat)
+* Fixed `Class.class.is_a?(Class.class.class.class.class)` 🎉 (See #4375, #4374, thanks @rockwyc992)
+* Fixed select hanging when sending before receive (See #3862, #3899, thanks @kostya)
+* Fixed "Unknown key in access token json: id_token" error in OAuth2 client (See #4437)
+* Fixed macro lookup conflicting with method lookup when including on top level (See #236)
+* Fixed Vagrant images (See #4510, #4508, thanks @Val)
+* Fixed `IO::FileDescriptor#seek` from current position (See #4558, thanks @ysbaddaden)
+* Fixed `IO::Memory#gets_to_end` to consume the `IO` (See #4415, thanks @jhass)
+* Fixed setting of XML attributes (See #4562, thanks @asterite)
+* Fixed "SSL_shutdown: Operation now in progress" error by retrying (See #3168, thanks @akzhan)
+* Fixed WebSocket negotiation (See #4386, thanks @RX14)
+
+# 0.22.0 (20-04-2017)
+
+* **(breaking-change)** Removed `Process.new(pid)` is now private (See #4197)
+* **(breaking-change)** IO#peek now returns an empty slice on EOF (See #4240, #4261)
+* **(breaking-change)** Rename `WeakRef#target` to `WeakRef#value` (See #4293)
+* **(breaking-change)** Rename `HTTP::Params.from_hash` to `HTTP::Params.encode` (See #4205)
+* **(breaking-change)** `'\"'` is now invalid, use `'"'` (See #4309)
+* Improved backtrace function names are now read from DWARF sections (See #3958, thanks @ysbaddaden)
+* Improved sigfaults and exceptions are printed to STDERR (See #4163, thanks @Sija)
+* Improved SSL Sockets are now buffered (See #4248)
+* Improved type inference on loops (See #4242, #4243)
+* Improved `pp` and `p`, the printed value is returned (See #4285, #4283, thanks @MakeNowJust)
+* Added support for OpenSSL 1.1.0 (See #4215, #4230, thanks @ysbaddaden)
+* Added `SecureRandom#random_bytes(Bytes)` (See #4191, thanks @konovod)
+* Added setting and deleting of attributes on `XML::Node` (See #3902, thanks @bmmcginty)
+* Added `File.touch` and `FileUtils.touch` methods (See #4069, thanks @Sija)
+* Added `#values_at` for `CSV` (See #4157, thanks @need47)
+* Added `Time#clone` (See #4174, thanks @Sija)
+* Added `ancestors` macro method (See #3875, thanks @david50407)
+* Added `skip` macro method (#4237, thanks @mverzilli)
+* Added `Colorize.on_tty_only!` for easier toggling (See #4075, #4271, thanks @MakeNowJust)
+* Added `WebSocket#on_binary` to receive binary messages (See #2774, thanks @lbguilherme)
+* Fixed `Iterator.of` stops iterating when `Iterator.stop` is returned (See #4208)
+* Fixed `String#insert` for non-ascii Char (See #4164, thanks @Papierkorb)
+* Fixed `File.link` now creates a hard link (#4116, thanks @KCreate)
+* Fixed error message for `#to_h` over empty `NamedTuple` (See #4076, thanks @karlseguin)
+* Fixed `NamedTuple#to_h` does no longer call to value's `#clone` (See #4203)
+* Fixed `Math#gamma` and `Math#lgamma` (See #4229, thanks @KCreate)
+* Fixed `TCPSocket` creation for 0 port for Mac OSX (See #4177, thanks @will)
+* Fixed repo name extraction from git remote in doc tool (See #4132, thanks @Sija)
+* Fixed `self` resolution when including a generic module (See #3972, thanks @MakeNowJust)
+* Fixed debug information was missing in some cases (See #4166, #4202, #4254)
+* Fixed use generic ARM architecture target triple for all ARM architectures (See #4167, thanks @ysbaddaden)
+* Fixed macro run arguments escaping
+* Fixed zsh completion (See #4284, thanks @veelenga)
+* Fixed honor `--no-color` option in spec (See #4306, thanks @luislavena)
+* [Some bug fixes](https://github.com/crystal-lang/crystal/issues?q=is%3Aclosed+milestone%3A0.22.0)
+
+# 0.21.1 (06-03-2017)
+
+* Improved lookup of abstract def implementors (see #4052)
+* Improved allocation of objects without pointer instance variables using `malloc_atomic` (see #4081)
+* Added `crystal --version` reports also the LLVM version (see #4095, thanks @matiasgarciaisaia)
+* Fixed instance variables initializers corner cases (see #3988)
+* Fixed `crystal play` was broken (see #4061)
+* Fixed `Atomic` can be set to `nil` (see #4062)
+* Fixed `GZip::Header` extra byte (see #4068, thanks @crisward)
+* Fixed `ASTNode#to_s` for `Attribute` (see #4098, thanks @olbat)
+* [Some bug fixes](https://github.com/crystal-lang/crystal/issues?q=is%3Aclosed+milestone%3A0.21.1)
+
+# 0.21.0 (20-02-2017)
+
+* **(breaking-change)** The compiler now reuses previous macro run compilations so `{{ run(...) }}` is only re-run if the code changes
+* **(breaking-change)** Spec: `assert { ... }` is now `it { ... }` (thanks @TheLonelyGhost)
+* **(breaking-change)** Renamed `Set#merge!` to `Set#concat`
+* **(breaking-change)** `Zlib` was split into `Flate`, `Gzip` and `Zlib` ([bda40f](https://github.com/crystal-lang/crystal/commit/bda40f))
+* **(breaking-change)** `Crypto::MD5` is now `Digest::MD5`
+* **(breaking-change)** `String#chop` is now `String#rchop`
+* **(breaking-change)** `String#to_slice` now returns a read-only Slice
+* **(breaking-change)** `String` can now hold invalid UTF-8 byte sequences, and they produce a unicode replacement character when traversed
+* **(breaking-change)** Removed `String#lchomp`. Use `String#lchop`
+* **(breaking-change)** Octal escapes inside strings incorrectly produced a codepoint value instead of a byte value
+* **(breaking-change)** Removed octal escape from char literals
+* Fixed compiler performance regression related to cached files ([f69e37e](https://github.com/crystal-lang/crystal/commit/f69e37e))
+* Added `\xHH` escape sequence in string literals
+* `Char::Reader` can now traverse a string backwards
+* `Enum#to_s` now uses pipes instead of commas for flag enums
+* `IO#read_string` is now encoding-aware
+* `OAuth2::Client` now sends `application/json` Accept header, and considers the `expires_in` access token property as optional
+* `Slice` can now be read-only
+* `TCPServer` no longer set SO_REUSEPORT to true by default
+* Added `HTTP::Multipart` and `HTTP::FormData` (thanks @RX14)
+* Added `File::Stat#pipe?`
+* Added `File.utime`
+* Added `IO#peek`
+* Added `String#strip(arg)`, `String#lstrip(arg)`, `String#rstrip(arg)`
+* Added `String#lchop`, `String#lchop(prefix)`, `String#rchop` and `String#rchop(suffix)`
+* Added `String#hexbytes` and `String#hexbytes?`
+* Added `String#scrub` and `String#valid_encoding?`
+* Added `include?` macro method for StringLiteral, SymbolLiteral and MacroId (thanks @karlseguin)
+* Added "view source" links to GitLab (thanks @ezrast)
+* Updated CONTRIBUTING.md guidelines
+* [Some bug fixes](https://github.com/crystal-lang/crystal/issues?q=is%3Aclosed+milestone%3A0.21.0)
+
 # 0.20.5 (20-01-2017)
 
 * Improved performance in `String#index`, `String#rindex` due to Rabin-Karp algorithm (thanks @MakeNowJust).

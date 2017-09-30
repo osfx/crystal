@@ -58,6 +58,9 @@ struct Char
   # The maximum valid codepoint for a character.
   MAX_CODEPOINT = 0x10ffff
 
+  # The replacement character, used on invalid utf-8 byte sequences
+  REPLACEMENT = '\ufffd'
+
   # Returns the difference of the codepoint values of this char and *other*.
   #
   # ```
@@ -405,15 +408,15 @@ struct Char
   #
   # ```
   # 'z'.upcase { |v| puts v } # prints 'Z'
-  # 'ﬄ'.upcase { |v| puts v } # prints 'F', 'F', 'F'
+  # 'ﬄ'.upcase { |v| puts v } # prints 'F', 'F', 'L'
   # ```
   def upcase(options = Unicode::CaseOptions::None)
     Unicode.upcase(self, options) { |char| yield char }
   end
 
-  # Returns this char's codepoint.
-  def hash
-    ord
+  # See `Object#hash(hasher)`
+  def hash(hasher)
+    hasher.char(self)
   end
 
   # Returns a Char that is one codepoint bigger than this char's codepoint.
@@ -568,7 +571,7 @@ struct Char
   # 'z'.to_i(16) # raises ArgumentError
   # ```
   def to_i?(base : Int = 10) : Int32?
-    raise ArgumentError.new "invalid base #{base}, expected 2 to 36" unless 2 <= base <= 36
+    raise ArgumentError.new "Invalid base #{base}, expected 2 to 36" unless 2 <= base <= 36
 
     if base == 10
       return unless '0' <= self <= '9'
